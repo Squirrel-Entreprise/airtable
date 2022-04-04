@@ -7,6 +7,10 @@
     go get github.com/airtable/go-airtable
 ```
 
+## Aitable API
+
+Airtable uses simple token-based authentication. To generate or manage your API key, visit your [account](https://airtable.com/account) page.
+
 ## Usage
 
 ```go
@@ -18,7 +22,8 @@
     )
 
     func main() {
-        a := airtable.New("xxx", "yyy")
+        
+        a := airtable.New("api_key_xxx", "id_base_yyy")
 
         productTable := airtable.Table{
             Name:       "Products", // Name of the table
