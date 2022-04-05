@@ -1,5 +1,8 @@
-# Airtable API wrapper for Golang
+Very simple pure Go Airtable API wrapper
+================
 
+[![GoDoc](https://pkg.go.dev/github.com/Squirrel-Entreprise/airtable?status.svg)](https://pkg.go.dev/github.com/Squirrel-Entreprise/airtable)
+![Go](https://github.com/Squirrel-Entreprise/airtable/workflows/Go/badge.svg)
 
 ## Installation
 

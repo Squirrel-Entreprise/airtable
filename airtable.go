@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -15,12 +14,16 @@ const (
 )
 
 type Airtable struct {
-	apiKey string `json:"apiKey"`
-	base   string `json:"base"`
+	client *http.Client
+	apiKey string
+	base   string
 }
 
 func New(apiKey, base string) *Airtable {
 	return &Airtable{
+		client: &http.Client{
+			Timeout: time.Second * 10,
+		},
 		apiKey: apiKey,
 		base:   base,
 	}
@@ -91,6 +94,10 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 		table.View = "Grid view"
 	}
 
+	if table.Name == "" {
+		return fmt.Errorf("table name is required")
+	}
+
 	table.View = url.QueryEscape(table.View)
 	table.Name = url.QueryEscape(table.Name)
 
@@ -119,17 +126,11 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
 	req.Header.Add("Content-Type", "application/json")
 
-	client := http.Client{
-		Timeout: time.Second * 10,
-	}
-
-	res, err := client.Do(req)
+	res, err := a.client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-
-	log.Println(method, path, res.StatusCode)
 
 	if res.StatusCode == http.StatusUnprocessableEntity {
 		return fmt.Errorf("%v Unprocessable Entity", res.StatusCode)
