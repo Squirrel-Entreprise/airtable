@@ -21,36 +21,11 @@ func main() {
 		ID          string    `json:"id"`
 		CreatedTime time.Time `json:"createdTime"`
 		Fields      struct {
-			Name  string `json:"Name"`
-			Cover []struct {
-				ID         string `json:"id"`
-				Width      int    `json:"width"`
-				Height     int    `json:"height"`
-				URL        string `json:"url"`
-				Filename   string `json:"filename"`
-				Size       int    `json:"size"`
-				Type       string `json:"type"`
-				Thumbnails struct {
-					Small struct {
-						URL    string `json:"url"`
-						Width  int    `json:"width"`
-						Height int    `json:"height"`
-					} `json:"small"`
-					Large struct {
-						URL    string `json:"url"`
-						Width  int    `json:"width"`
-						Height int    `json:"height"`
-					} `json:"large"`
-					Full struct {
-						URL    string `json:"url"`
-						Width  int    `json:"width"`
-						Height int    `json:"height"`
-					} `json:"full"`
-				} `json:"thumbnails"`
-			} `json:"cover"`
-			Category string   `json:"Category"`
-			Price    float64  `json:"Price"`
-			Carts    []string `json:"Carts"`
+			Name     string                `json:"Name"`
+			Cover    []airtable.Attachment `json:"cover"`
+			Category string                `json:"Category"`
+			Price    float64               `json:"Price"`
+			Carts    []string              `json:"Carts"`
 		} `json:"fields"`
 	}
 

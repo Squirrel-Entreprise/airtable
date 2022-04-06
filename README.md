@@ -38,7 +38,13 @@ Airtable uses simple token-based authentication. To generate or manage your API 
         type productItemAirtable struct {
             ID          string    `json:"id"`
             CreatedTime time.Time `json:"createdTime"`
-            Fields      interface{} `json:"fields"` // replace interface{} with your struct
+            Fields      struct {
+                Name     string                `json:"Name"`
+                Cover    []airtable.Attachment `json:"cover"`
+                Category string                `json:"Category"`
+                Price    float64               `json:"Price"`
+                Carts    []string              `json:"Carts"`
+            } `json:"fields"`
         }
 
         // List products
