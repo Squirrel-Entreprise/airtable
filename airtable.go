@@ -137,7 +137,7 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 	}
 
 	if res.StatusCode == http.StatusTooManyRequests {
-		time.Sleep(time.Second * 5)
+		time.Sleep(time.Second * 1)
 		return a.call(method, table, id, payload, response)
 	}
 

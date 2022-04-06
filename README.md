@@ -8,7 +8,7 @@ Very simple pure Go Airtable API wrapper
 ## Installation
 
 ```go
-    go get github.com/airtable/go-airtable
+    go get github.com/Squirrel-Entreprise/airtable
 ```
 
 ## Aitable API
@@ -22,7 +22,7 @@ Airtable uses simple token-based authentication. To generate or manage your API 
 
     import (
         "fmt"
-        "github.com/airtable/go-airtable"
+        "github.com/Squirrel-Entreprise/airtable"
     )
 
     func main() {
