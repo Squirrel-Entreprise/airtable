@@ -147,3 +147,30 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 
 	return json.NewDecoder(res.Body).Decode(response)
 }
+
+type Attachment struct {
+	ID         string `json:"id"`
+	Width      int    `json:"width"`
+	Height     int    `json:"height"`
+	URL        string `json:"url"`
+	Filename   string `json:"filename"`
+	Size       int    `json:"size"`
+	Type       string `json:"type"`
+	Thumbnails struct {
+		Small struct {
+			URL    string `json:"url"`
+			Width  int    `json:"width"`
+			Height int    `json:"height"`
+		} `json:"small"`
+		Large struct {
+			URL    string `json:"url"`
+			Width  int    `json:"width"`
+			Height int    `json:"height"`
+		} `json:"large"`
+		Full struct {
+			URL    string `json:"url"`
+			Width  int    `json:"width"`
+			Height int    `json:"height"`
+		} `json:"full"`
+	} `json:"thumbnails"`
+}
