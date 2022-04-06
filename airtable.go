@@ -148,6 +148,7 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 	return json.NewDecoder(res.Body).Decode(response)
 }
 
+// Attachment object may contain the following properties
 type Attachment struct {
 	ID         string `json:"id"`
 	Width      int    `json:"width"`
