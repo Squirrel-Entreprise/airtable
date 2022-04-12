@@ -20,7 +20,7 @@ var (
 
 func init() {
 	Client = &http.Client{
-		Timeout: time.Second * 10,
+		Timeout: time.Second * 30,
 	}
 }
 
@@ -89,8 +89,11 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 		return fmt.Errorf("table name is required")
 	}
 
-	table.View = url.QueryEscape(table.View)
-	table.Name = url.QueryEscape(table.Name)
+	v := &url.URL{Path: table.View}
+	table.View = v.String()
+
+	n := &url.URL{Path: table.Name}
+	table.Name = n.String()
 
 	var path string
 
