@@ -9,21 +9,32 @@ import (
 	"time"
 )
 
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+var (
+	Client  HTTPClient
+	attempt int
+)
+
+func init() {
+	Client = &http.Client{
+		Timeout: time.Second * 10,
+	}
+}
+
 const (
 	apiUrl = "https://api.airtable.com/v0"
 )
 
 type Airtable struct {
-	client *http.Client
 	apiKey string
 	base   string
 }
 
 func New(apiKey, base string) *Airtable {
 	return &Airtable{
-		client: &http.Client{
-			Timeout: time.Second * 10,
-		},
 		apiKey: apiKey,
 		base:   base,
 	}
@@ -36,52 +47,32 @@ type Table struct {
 }
 
 func (a *Airtable) List(table Table, response interface{}) error {
-	if err := a.call(GET, table, nil, nil, response); err != nil {
-		return err
-	}
-
-	return nil
+	return a.call(GET, table, nil, nil, response)
 }
 
 func (a *Airtable) Get(table Table, id string, response interface{}) error {
-	if err := a.call(GET, table, &id, nil, response); err != nil {
-		return err
-	}
-
-	return nil
+	return a.call(GET, table, &id, nil, response)
 }
 func (a *Airtable) Create(table Table, data []byte, response interface{}) error {
-	if err := a.call(POST, table, nil, data, response); err != nil {
-		return err
-	}
-
-	return nil
+	return a.call(POST, table, nil, data, response)
 }
 
 func (a *Airtable) Update(table Table, id string, data []byte, response interface{}) error {
-	if err := a.call(PATCH, table, &id, data, response); err != nil {
-		return err
-	}
-
-	return nil
+	return a.call(PATCH, table, &id, data, response)
 }
 
 func (a *Airtable) Delete(table Table, id string) error {
-	if err := a.call(DELETE, table, &id, nil, nil); err != nil {
-		return err
-	}
-
-	return nil
+	return a.call(DELETE, table, &id, nil, nil)
 }
 
 type methodHttp string
 
 const (
-	GET    methodHttp = "GET"
-	POST   methodHttp = "POST"
-	PUT    methodHttp = "PUT"
-	PATCH  methodHttp = "PATCH"
-	DELETE methodHttp = "DELETE"
+	GET    methodHttp = http.MethodGet
+	POST   methodHttp = http.MethodPost
+	PUT    methodHttp = http.MethodPut
+	PATCH  methodHttp = http.MethodPatch
+	DELETE methodHttp = http.MethodDelete
 )
 
 func (a *Airtable) call(method methodHttp, table Table, id *string, payload []byte, response interface{}) error {
@@ -126,26 +117,70 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
 	req.Header.Add("Content-Type", "application/json")
 
-	res, err := a.client.Do(req)
+	res, err := Client.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
 
-	if res.StatusCode == http.StatusUnprocessableEntity {
-		return fmt.Errorf("%v Unprocessable Entity", res.StatusCode)
+	if res.StatusCode == http.StatusTooManyRequests {
+		if attempt < 5 {
+			attempt++
+			time.Sleep(time.Second * 1)
+			return a.call(method, table, id, payload, response)
+		}
+		return fmt.Errorf("the API is limited to 5 requests per second per base. If you exceed this rate, you will receive a 429 status code and will need to wait 30 seconds before subsequent requests will succeed")
 	}
 
-	if res.StatusCode == http.StatusTooManyRequests {
-		time.Sleep(time.Second * 1)
-		return a.call(method, table, id, payload, response)
+	if res.StatusCode == http.StatusBadRequest {
+		return fmt.Errorf("the request encoding is invalid; the request can't be parsed as a valid JSON")
+	}
+
+	if res.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("accessing a protected resource without authorization or with invalid credentials")
+	}
+
+	if res.StatusCode == http.StatusPaymentRequired {
+		return fmt.Errorf("the account associated with the API key making requests hits a quota that can be increased by upgrading the Airtable account plan")
+	}
+
+	if res.StatusCode == http.StatusForbidden {
+		return fmt.Errorf("accessing a protected resource with API credentials that don't have access to that resource")
+	}
+
+	if res.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("route or resource is not found. This error is returned when the request hits an undefined route, or if the resource doesn't exist (e.g. has been deleted)")
+	}
+
+	if res.StatusCode == http.StatusRequestEntityTooLarge {
+		return fmt.Errorf("the request exceeded the maximum allowed payload size. You shouldn't encounter this under normal use")
+	}
+
+	if res.StatusCode == http.StatusUnprocessableEntity {
+		return fmt.Errorf("the request data is invalid. This includes most of the base-specific validations. You will receive a detailed error message and code pointing to the exact issue")
+	}
+
+	if res.StatusCode == http.StatusInternalServerError {
+		return fmt.Errorf("the server encountered an unexpected condition")
+	}
+
+	if res.StatusCode == http.StatusBadGateway {
+		return fmt.Errorf("airtable's servers are restarting or an unexpected outage is in progress. You should generally not receive this error, and requests are safe to retry")
+	}
+
+	if res.StatusCode == http.StatusServiceUnavailable {
+		return fmt.Errorf("the server could not process your request in time. The server could be temporarily unavailable, or it could have timed out processing your request. You should retry the request with backoffs")
 	}
 
 	if method == DELETE {
 		return nil
 	}
 
-	return json.NewDecoder(res.Body).Decode(response)
+	if response != nil {
+		return json.NewDecoder(res.Body).Decode(response)
+	}
+
+	return nil
 }
 
 // Attachment object may contain the following properties

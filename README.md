@@ -65,4 +65,4 @@ Airtable uses simple token-based authentication. To generate or manage your API 
     }
 ```
 
-More examples can be found in `cmd/airtable/main.go`.
+More examples can be found in `EXAMPLE.md`.
