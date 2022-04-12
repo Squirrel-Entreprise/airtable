@@ -109,10 +109,7 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 		path = fmt.Sprintf("%s/%s/%s", apiUrl, a.base, table.Name)
 	}
 
-	req, err := http.NewRequest(string(method), path, bytes.NewBuffer(payload))
-	if err != nil {
-		return err
-	}
+	req, _ := http.NewRequest(string(method), path, bytes.NewBuffer(payload))
 
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
 	req.Header.Add("Content-Type", "application/json")

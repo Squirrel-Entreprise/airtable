@@ -2,6 +2,7 @@ package airtable
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -34,6 +35,22 @@ func TestCall(t *testing.T) {
 	t.Run("empty table name", func(t *testing.T) {
 		if err := a.call(GET, Table{}, nil, nil, nil); err == nil {
 			t.Errorf("table name is required, got %s", err)
+		}
+	})
+
+	t.Run("client_do", func(t *testing.T) {
+		id := "123"
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: 200,
+					Body:       responseBody,
+				}, fmt.Errorf("client_do")
+			},
+		}
+		if err := a.call(GET, Table{Name: "test"}, &id, nil, nil); err == nil {
+			t.Errorf("call should return error, got %s", err)
 		}
 	})
 
