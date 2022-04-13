@@ -2,7 +2,7 @@ Very simple pure Go Airtable API wrapper
 ================
 [![GoDoc](https://godoc.org/github.com/Squirrel-Entreprise/airtable?status.svg)](https://pkg.go.dev/github.com/Squirrel-Entreprise/airtable)
 ![Go](https://github.com/Squirrel-Entreprise/airtable/workflows/Go/badge.svg)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Squirrel-Entreprise/airtable)]
+![Go Report Card](https://goreportcard.com/badge/github.com/Squirrel-Entreprise/airtable)
 [![codecov](https://codecov.io/gh/Squirrel-Entreprise/airtable/branch/main/graph/badge.svg)](https://codecov.io/gh/Squirrel-Entreprise/airtable)
 
 ## Installation
