@@ -50,6 +50,12 @@ type Table struct {
 
 	// https://support.airtable.com/hc/en-us/articles/203255215-Formula-Field-Reference
 	FilterByFormula string `json:"filterByFormula"`
+	Sort            []Sort `json:"sort"`
+}
+
+type Sort struct {
+	Field     string
+	Direction SortDirection
 }
 
 func (a *Airtable) List(table Table, response interface{}) error {
@@ -115,6 +121,16 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 		if fields != "" {
 			f := &url.URL{Path: fields}
 			path = fmt.Sprintf("%s%s", path, f.String())
+		}
+
+		var sorts string
+		for k, s := range table.Sort {
+			sorts = fmt.Sprintf("%s&sort[%v][field]=%s&sort[%v][direction]=%s", sorts, k, s.Field, k, s.Direction)
+		}
+
+		if sorts != "" {
+			s := &url.URL{Path: sorts}
+			path = fmt.Sprintf("%s%s", path, s.String())
 		}
 
 		ff := &url.URL{Path: table.FilterByFormula}
@@ -684,4 +700,11 @@ const (
 	PacificTongatapu         TimeZone = "Pacific/Tongatapu"
 	PacificWake              TimeZone = "Pacific/Wake"
 	PacificWallis            TimeZone = "Pacific/Wallis"
+)
+
+type SortDirection string
+
+const (
+	Ascending  SortDirection = "asc"
+	Descending SortDirection = "desc"
 )

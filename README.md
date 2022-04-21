@@ -33,34 +33,27 @@ Airtable uses simple token-based authentication. To generate or manage your API 
             Name:       "Products", // Name of the table
             MaxRecords: "100", // Max records to return
             View:       "Grid view", // View name
+            FilterByFormula: fmt.Sprintf(`Name="%s"`, "Apple"), // Filter by formula
+            Fields: []string{ // Fields to return
+                "Name",
+                "ID_Product",
+            },
+            Sort: []airtable.Sort{
+                {
+                    Field:     "ID_Product",
+                    Direction: airtable.Descending,
+                },
+            },
         }
 
-        type productItemAirtable struct {
-            ID          string    `json:"id"`
-            CreatedTime time.Time `json:"createdTime"`
-            Fields      struct {
-                Name     string                `json:"Name"`
-                Cover    []airtable.Attachment `json:"cover"`
-                Category string                `json:"Category"`
-                Price    float64               `json:"Price"`
-                Carts    []string              `json:"Carts"`
-            } `json:"fields"`
-        }
-
-        // List products
-        type productsListAirtable struct {
-            Records []productItemAirtable `json:"records"`
-            Offset  string                `json:"offset"`
-        }
-
-        products := productsListAirtable{}
+        var products airtable.AirtableList
 
         if err := a.List(productTable, &products); err != nil {
             fmt.Println(err)
         }
 
         for _, p := range products.Records {
-            fmt.Println(p.ID, p.Fields.Name, p.Fields.Price)
+            fmt.Println(p.ID, p.Fields["Name"], p.Fields["Price"])
         }
     }
 ```
