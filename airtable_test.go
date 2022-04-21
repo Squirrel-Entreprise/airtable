@@ -60,6 +60,26 @@ func TestCall(t *testing.T) {
 		}
 	})
 
+	t.Run("list path + fields", func(t *testing.T) {
+		table := Table{
+			Name:   "test",
+			Fields: []string{"field1", "field2"},
+		}
+		if err := a.call(GET, table, nil, nil, nil); err == nil {
+			t.Errorf("call should not return error, got %s", err)
+		}
+	})
+
+	t.Run("list path + formula", func(t *testing.T) {
+		table := Table{
+			Name:            "test",
+			FilterByFormula: fmt.Sprintf(`ID="%s"`, "recXXX"),
+		}
+		if err := a.call(GET, table, nil, nil, nil); err == nil {
+			t.Errorf("call should not return error, got %s", err)
+		}
+	})
+
 	t.Run("get path || delete path || update path", func(t *testing.T) {
 		id := "123"
 		Client = &MockClient{
