@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
+	"net/url"
 	"testing"
 )
 
@@ -29,17 +29,296 @@ func TestNew(t *testing.T) {
 	}
 }
 
-func TestCall(t *testing.T) {
+func TestList(t *testing.T) {
 	a := New("xxx", "yyy")
 
 	t.Run("empty table name", func(t *testing.T) {
-		if err := a.call(GET, Table{}, nil, nil, nil); err == nil {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		if err := a.List(Table{}, nil); err == nil {
 			t.Errorf("table name is required, got %s", err)
 		}
 	})
 
+	t.Run("fields", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		table := Table{
+			Name:   "test",
+			Fields: []string{"ok", "ok2"},
+		}
+		var r AirtableList
+		if err := a.List(table, &r); err != nil {
+			t.Errorf("list should not return error, got %s", err)
+		}
+	})
+
+	t.Run("sort", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		table := Table{
+			Name: "test",
+			Sort: []Sort{
+				{
+					Field:     "ok",
+					Direction: Descending,
+				},
+			},
+		}
+		var r AirtableList
+		if err := a.List(table, &r); err != nil {
+			t.Errorf("list should not return error, got %s", err)
+		}
+	})
+
+	t.Run("filter by formula", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		table := Table{
+			Name:            "test",
+			FilterByFormula: "ok = 'ok'",
+		}
+		var r AirtableList
+		if err := a.List(table, &r); err != nil {
+			t.Errorf("list should not return error, got %s", err)
+		}
+	})
+}
+
+func TestGet(t *testing.T) {
+	a := New("xxx", "yyy")
+
+	t.Run("empty table name", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Get(Table{}, "", &r); err == nil {
+			t.Errorf("table name is required, got %s", err)
+		}
+	})
+
+	t.Run("get", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Get(Table{Name: "test"}, "id", &r); err != nil {
+			t.Errorf("get should not return error, got %s", err)
+		}
+	})
+}
+
+func TestCreate(t *testing.T) {
+	a := New("xxx", "yyy")
+
+	t.Run("empty table name", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Create(Table{}, nil, &r); err == nil {
+			t.Errorf("table name is required, got %s", err)
+		}
+	})
+
+	t.Run("create", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Create(Table{Name: "test"}, nil, &r); err != nil {
+			t.Errorf("create should not return error, got %s", err)
+		}
+	})
+}
+
+func TestUpdate(t *testing.T) {
+	a := New("xxx", "yyy")
+
+	t.Run("empty table name", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Update(Table{}, "id", nil, &r); err == nil {
+			t.Errorf("table name is required, got %s", err)
+		}
+	})
+
+	t.Run("update", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Update(Table{Name: "test"}, "id", nil, &r); err != nil {
+			t.Errorf("update should not return error, got %s", err)
+		}
+	})
+}
+
+func TestDelete(t *testing.T) {
+	a := New("xxx", "yyy")
+
+	t.Run("empty table name", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		if err := a.Delete(Table{}, ""); err == nil {
+			t.Errorf("table name is required, got %s", err)
+		}
+	})
+
+	t.Run("delete", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		if err := a.Delete(Table{Name: "test"}, "id"); err != nil {
+			t.Errorf("delete should not return error, got %s", err)
+		}
+	})
+}
+
+func TestCall(t *testing.T) {
+	a := New("xxx", "yyy")
+
 	t.Run("client_do", func(t *testing.T) {
-		id := "123"
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -49,116 +328,16 @@ func TestCall(t *testing.T) {
 				}, fmt.Errorf("client_do")
 			},
 		}
-		if err := a.call(GET, Table{Name: "test"}, &id, nil, nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("call should return error, got %s", err)
-		}
-	})
-
-	t.Run("list path", func(t *testing.T) {
-		if err := a.call(GET, Table{Name: "test"}, nil, nil, nil); err == nil {
-			t.Errorf("call should not return error, got %s", err)
-		}
-	})
-
-	t.Run("list path + fields", func(t *testing.T) {
-		table := Table{
-			Name:   "test",
-			Fields: []string{"field1", "field2"},
-		}
-		if err := a.call(GET, table, nil, nil, nil); err == nil {
-			t.Errorf("call should not return error, got %s", err)
-		}
-	})
-
-	t.Run("list path + formula", func(t *testing.T) {
-		table := Table{
-			Name:            "test",
-			FilterByFormula: fmt.Sprintf(`ID="%s"`, "recXXX"),
-		}
-		if err := a.call(GET, table, nil, nil, nil); err == nil {
-			t.Errorf("call should not return error, got %s", err)
-		}
-	})
-
-	t.Run("list path + sort", func(t *testing.T) {
-		table := Table{
-			Name: "test",
-			Sort: []Sort{
-				{
-					Field:     "ID",
-					Direction: Descending,
-				},
-			},
-		}
-		if err := a.call(GET, table, nil, nil, nil); err == nil {
-			t.Errorf("call should not return error, got %s", err)
-		}
-	})
-
-	t.Run("get path || delete path || update path", func(t *testing.T) {
-		id := "123"
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test/"+id {
-					t.Errorf("Expected to request '/v0/yyy/test/"+id+"', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: 200,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-		if err := a.call(GET, Table{Name: "test"}, &id, nil, nil); err != nil {
-			t.Errorf("call should not return error, got %s", err)
-		}
-	})
-
-	t.Run("create path", func(t *testing.T) {
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: 200,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err != nil {
-			t.Errorf("call should not return error, got %s", err)
-		}
-	})
-
-	t.Run("delete path", func(t *testing.T) {
-		id := "123"
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test/"+id {
-					t.Errorf("Expected to request '/v0/yyy/test/"+id+"', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: 200,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-		if err := a.call(DELETE, Table{Name: "test"}, &id, nil, nil); err != nil {
-			t.Errorf("call should not return error, got %s", err)
 		}
 	})
 
 	t.Run("bad_request", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -168,7 +347,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -176,8 +355,8 @@ func TestCall(t *testing.T) {
 	t.Run("unauthorized", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -187,7 +366,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -195,8 +374,8 @@ func TestCall(t *testing.T) {
 	t.Run("payment_required", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -206,7 +385,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -214,8 +393,8 @@ func TestCall(t *testing.T) {
 	t.Run("forbidden", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -225,7 +404,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -233,8 +412,8 @@ func TestCall(t *testing.T) {
 	t.Run("not_found", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -244,7 +423,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -252,8 +431,8 @@ func TestCall(t *testing.T) {
 	t.Run("request_entity_too_large", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -263,7 +442,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -271,8 +450,8 @@ func TestCall(t *testing.T) {
 	t.Run("unprocessable_entity", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -282,7 +461,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -290,8 +469,8 @@ func TestCall(t *testing.T) {
 	t.Run("internal_server_error", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -301,7 +480,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -309,8 +488,8 @@ func TestCall(t *testing.T) {
 	t.Run("bad_gateway", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -320,7 +499,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -328,8 +507,8 @@ func TestCall(t *testing.T) {
 	t.Run("service_unavailable", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -339,7 +518,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -347,8 +526,8 @@ func TestCall(t *testing.T) {
 	t.Run("too_many_requests", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -358,7 +537,7 @@ func TestCall(t *testing.T) {
 				}, nil
 			},
 		}
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), nil); err == nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
@@ -366,8 +545,8 @@ func TestCall(t *testing.T) {
 	t.Run("response_nil", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
 				}
 
 				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
@@ -378,200 +557,8 @@ func TestCall(t *testing.T) {
 			},
 		}
 
-		var response Attachment
-		if err := a.call(POST, Table{Name: "test"}, nil, []byte(`ok`), &response); err != nil {
+		if err := a.call(GET, &url.URL{}, nil, nil); err != nil {
 			t.Errorf("Expected to return nil, got %s", err)
-		}
-	})
-}
-
-func TestList(t *testing.T) {
-	a := New("xxx", "yyy")
-
-	t.Run("not empty interface responce", func(t *testing.T) {
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-
-		type resp struct {
-			Records interface{} `json:"records"`
-			Offset  string      `json:"offset"`
-		}
-		var r resp
-		if err := a.List(Table{Name: "test"}, &r); err != nil {
-			t.Errorf("list should not return error, got %s", err)
-		}
-	})
-}
-
-func TestGet(t *testing.T) {
-	a := New("xxx", "yyy")
-
-	t.Run("not empty interface responce", func(t *testing.T) {
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test/" {
-					t.Errorf("Expected to request '/v0/yyy/test/', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-
-		type resp struct {
-			Records interface{} `json:"records"`
-			Offset  string      `json:"offset"`
-		}
-		var r resp
-		if err := a.Get(Table{Name: "test"}, "", &r); err != nil {
-			t.Errorf("get should not return error, got %s", err)
-		}
-	})
-}
-
-func TestCreate(t *testing.T) {
-	a := New("xxx", "yyy")
-
-	t.Run("422 unprocessable entity", func(t *testing.T) {
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: http.StatusUnprocessableEntity,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-		type resp struct {
-			Records interface{} `json:"records"`
-			Offset  string      `json:"offset"`
-		}
-		var r resp
-		if err := a.Create(Table{Name: "test"}, []byte(`ok`), &r); err != nil {
-			if !strings.Contains(err.Error(), "request data is invalid") {
-				t.Errorf("create should return 'request data is invalid', got %s", err)
-			}
-		}
-	})
-
-	t.Run("not empty interface responce", func(t *testing.T) {
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test" {
-					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-		type resp struct {
-			Records interface{} `json:"records"`
-			Offset  string      `json:"offset"`
-		}
-		var r resp
-		if err := a.Create(Table{Name: "test"}, []byte(`{"fields": {"Name": "Ail"}}`), &r); err != nil {
-			t.Errorf("create should not return error, got %s", err)
-		}
-	})
-}
-
-func TestUpdate(t *testing.T) {
-	a := New("xxx", "yyy")
-
-	t.Run("422 unprocessable entity", func(t *testing.T) {
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test/" {
-					t.Errorf("Expected to request '/v0/yyy/test/', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: http.StatusUnprocessableEntity,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-
-		type resp struct {
-			Records interface{} `json:"records"`
-			Offset  string      `json:"offset"`
-		}
-		var r resp
-		if err := a.Update(Table{Name: "test"}, "", []byte(`ok`), &r); err != nil {
-			if !strings.Contains(err.Error(), "request data is invalid") {
-				t.Errorf("create should return 'request data is invalid', got %s", err)
-			}
-		}
-	})
-
-	t.Run("not empty interface responce", func(t *testing.T) {
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test/" {
-					t.Errorf("Expected to request '/v0/yyy/test/', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-
-		type resp struct {
-			Records interface{} `json:"records"`
-			Offset  string      `json:"offset"`
-		}
-		var r resp
-		if err := a.Update(Table{Name: "test"}, "", []byte(`{"fields": {"Name": "Ail"}}`), &r); err != nil {
-			t.Errorf("update should not return error, got %s", err)
-		}
-	})
-}
-
-func TestDelete(t *testing.T) {
-	a := New("xxx", "yyy")
-
-	t.Run("", func(t *testing.T) {
-		Client = &MockClient{
-			DoFunc: func(req *http.Request) (*http.Response, error) {
-				if req.URL.Path != "/v0/yyy/test/" {
-					t.Errorf("Expected to request '/v0/yyy/test/', got: %s", req.URL.Path)
-				}
-
-				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
-				return &http.Response{
-					StatusCode: http.StatusOK,
-					Body:       responseBody,
-				}, nil
-			},
-		}
-		if err := a.Delete(Table{Name: "test"}, ""); err != nil {
-			t.Errorf("delete should not return error, got %s", err)
 		}
 	})
 }

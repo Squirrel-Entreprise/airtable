@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -59,22 +60,73 @@ type Sort struct {
 }
 
 func (a *Airtable) List(table Table, response interface{}) error {
-	return a.call(GET, table, nil, nil, response)
+	if table.Name == "" {
+		return fmt.Errorf("table name is required")
+	}
+
+	values := url.Values{}
+	values.Add("maxRecords", table.MaxRecords)
+	values.Add("view", table.View)
+
+	for _, f := range table.Fields {
+		values.Add("fields[]", f)
+	}
+
+	for k, s := range table.Sort {
+		values.Add(fmt.Sprintf("sort[%v][field]", k), s.Field)
+		values.Add(fmt.Sprintf("sort[%v][direction]", k), string(s.Direction))
+	}
+
+	if table.FilterByFormula != "" {
+		values.Add("filterByFormula", table.FilterByFormula)
+	}
+
+	p := url.URL{
+		Path:     fmt.Sprintf("%s/%s", a.base, table.Name),
+		RawQuery: values.Encode(),
+	}
+
+	return a.call(GET, &p, nil, response)
 }
 
 func (a *Airtable) Get(table Table, id string, response interface{}) error {
-	return a.call(GET, table, &id, nil, response)
+	if table.Name == "" {
+		return fmt.Errorf("table name is required")
+	}
+	path := fmt.Sprintf("%s/%s/%s", a.base, table.Name, id)
+	p := &url.URL{Path: path}
+	return a.call(GET, p, nil, response)
 }
+
 func (a *Airtable) Create(table Table, data []byte, response interface{}) error {
-	return a.call(POST, table, nil, data, response)
+	if table.Name == "" {
+		return fmt.Errorf("table name is required")
+	}
+
+	p := url.URL{
+		Path: fmt.Sprintf("%s/%s", a.base, table.Name),
+	}
+	return a.call(POST, &p, data, response)
 }
 
 func (a *Airtable) Update(table Table, id string, data []byte, response interface{}) error {
-	return a.call(PATCH, table, &id, data, response)
+	if table.Name == "" {
+		return fmt.Errorf("table name is required")
+	}
+	p := url.URL{
+		Path: fmt.Sprintf("%s/%s/%s", a.base, table.Name, id),
+	}
+	return a.call(PATCH, &p, data, response)
 }
 
 func (a *Airtable) Delete(table Table, id string) error {
-	return a.call(DELETE, table, &id, nil, nil)
+	if table.Name == "" {
+		return fmt.Errorf("table name is required")
+	}
+	p := url.URL{
+		Path: fmt.Sprintf("%s/%s/%s", a.base, table.Name, id),
+	}
+	return a.call(DELETE, &p, nil, nil)
 }
 
 type methodHttp string
@@ -87,71 +139,11 @@ const (
 	DELETE methodHttp = http.MethodDelete
 )
 
-func (a *Airtable) call(method methodHttp, table Table, id *string, payload []byte, response interface{}) error {
+func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, response interface{}) error {
 
-	if table.MaxRecords == "" {
-		table.MaxRecords = "100"
-	}
+	log.Println(apiUrl + "/" + path.String())
 
-	if table.View == "" {
-		table.View = "Grid view"
-	}
-
-	if table.Name == "" {
-		return fmt.Errorf("table name is required")
-	}
-
-	v := &url.URL{Path: table.View}
-	table.View = v.String()
-
-	n := &url.URL{Path: table.Name}
-	table.Name = n.String()
-
-	var path string
-
-	// list
-	if method == GET && id == nil {
-		path = fmt.Sprintf("%s/%s/%s?maxRecords=%s&view=%s", apiUrl, a.base, table.Name, table.MaxRecords, table.View)
-
-		var fields string
-		for _, f := range table.Fields {
-			fields = fmt.Sprintf("%s&fields[]=%s", fields, f)
-		}
-
-		if fields != "" {
-			f := &url.URL{Path: fields}
-			path = fmt.Sprintf("%s%s", path, f.String())
-		}
-
-		var sorts string
-		for k, s := range table.Sort {
-			sorts = fmt.Sprintf("%s&sort[%v][field]=%s&sort[%v][direction]=%s", sorts, k, s.Field, k, s.Direction)
-		}
-
-		if sorts != "" {
-			s := &url.URL{Path: sorts}
-			path = fmt.Sprintf("%s%s", path, s.String())
-		}
-
-		ff := &url.URL{Path: table.FilterByFormula}
-		table.FilterByFormula = ff.String()
-
-		if table.FilterByFormula != "" {
-			path = fmt.Sprintf("%s&filterByFormula=%s", path, table.FilterByFormula)
-		}
-	}
-
-	// get || delete || update
-	if (method == GET && id != nil) || (method == DELETE && id != nil || (method == PUT && id != nil || method == PATCH && id != nil)) {
-		path = fmt.Sprintf("%s/%s/%s/%s", apiUrl, a.base, table.Name, *id)
-	}
-
-	// create
-	if method == POST {
-		path = fmt.Sprintf("%s/%s/%s", apiUrl, a.base, table.Name)
-	}
-
-	req, _ := http.NewRequest(string(method), path, bytes.NewBuffer(payload))
+	req, _ := http.NewRequest(string(method), apiUrl+"/"+path.String(), bytes.NewBuffer(payload))
 
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
 	req.Header.Add("Content-Type", "application/json")
@@ -166,7 +158,7 @@ func (a *Airtable) call(method methodHttp, table Table, id *string, payload []by
 		if attempt < 5 {
 			attempt++
 			time.Sleep(time.Second * 1)
-			return a.call(method, table, id, payload, response)
+			return a.call(method, path, payload, response)
 		}
 		return fmt.Errorf("the API is limited to 5 requests per second per base. If you exceed this rate, you will receive a 429 status code and will need to wait 30 seconds before subsequent requests will succeed")
 	}
