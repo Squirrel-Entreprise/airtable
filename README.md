@@ -29,18 +29,18 @@ Airtable uses simple token-based authentication. To generate or manage your API 
         
         a := airtable.New("api_key_xxx", "id_base_yyy")
 
-        productTable := airtable.Table{
-            Name:       "Products", // Name of the table
-            MaxRecords: "100", // Max records to return
-            View:       "Grid view", // View name
-            FilterByFormula: fmt.Sprintf(`Name="%s"`, "Apple"), // Filter by formula
+        productTable := airtable.Parameters{
+            Name:            "Products",                         // Name of the table
+            MaxRecords:      "100",                              // Max records to return
+            View:            "Grid view",                        // View name
+            FilterByFormula: fmt.Sprintf(`Name="%s"`, "Ananas"), // Filter by formula
             Fields: []string{ // Fields to return
                 "Name",
-                "ID_Product",
+                "Category",
             },
             Sort: []airtable.Sort{
                 {
-                    Field:     "ID_Product",
+                    Field:     "Name",
                     Direction: airtable.Descending,
                 },
             },
@@ -53,7 +53,7 @@ Airtable uses simple token-based authentication. To generate or manage your API 
         }
 
         for _, p := range products.Records {
-            fmt.Println(p.ID, p.Fields["Name"], p.Fields["Price"])
+            fmt.Println(p.ID, p.Fields["Name"], p.Fields["Category"])
         }
     }
 ```

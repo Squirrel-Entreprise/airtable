@@ -29,6 +29,140 @@ func TestNew(t *testing.T) {
 	}
 }
 
+func TestSetXAPIKey(t *testing.T) {
+	a := New("xxx", "yyy")
+
+	a.SetXAPIKey("xxx")
+}
+
+func TestListBases(t *testing.T) {
+	a := New("xxx", "yyy")
+	Client = &MockClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/v0/meta/bases" {
+				t.Errorf("Expected to request '/v0/meta/bases', got: %s", req.URL.Path)
+			}
+
+			responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{
+					"bases": [
+					{
+						"id": "appY3WxIBCdKPDdIa",
+						"name": "Apartment Hunting",
+						"permissionLevel": "create"
+					},
+					{
+						"id": "appSW9R5uCNmRmfl6",
+						"name": "Project Tracker",
+						"permissionLevel": "edit"
+					}
+				]
+			}`)))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       responseBody,
+			}, nil
+		},
+	}
+	_, err := a.ListBases()
+	if err != nil {
+		t.Errorf("list bases should not return error, got %s", err)
+	}
+
+}
+
+func TestBaseSchema(t *testing.T) {
+	a := New("xxx", "yyy")
+	Client = &MockClient{
+		DoFunc: func(req *http.Request) (*http.Response, error) {
+			if req.URL.Path != "/v0/meta/bases/xxx/tables" {
+				t.Errorf("Expected to request '/v0/meta/bases/xxx/tables', got: %s", req.URL.Path)
+			}
+
+			responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{
+				"tables": [
+				  {
+					"id": "tbltp8DGLhqbUmjK1",
+					"name": "Apartments",
+					"description": "Apartments to track.",
+					"primaryFieldId": "fld1VnoyuotSTyxW1",
+					"fields": [
+					  {
+						"id": "fld1VnoyuotSTyxW1",
+						"name": "Name",
+						"description": "Name of the apartment",
+						"type": "singleLineText"
+					  },
+					  {
+						"id": "fldoaIqdn5szURHpw",
+						"name": "Pictures",
+						"type": "multipleAttachment"
+					  },
+					  {
+						"id": "fldumZe00w09RYTW6",
+						"name": "District",
+						"type": "multipleRecordLinks",
+						"options": {
+						  "isReversed": false,
+						  "inverseLinkFieldId": "fldWnCJlo2z6ttT8Y",
+						  "linkedTableId": "tblK6MZHez0ZvBChZ",
+						  "prefersSingleRecordLink": true
+						}
+					  }
+					],
+					"views": [
+					  {
+						"id": "viwQpsuEDqHFqegkp",
+						"name": "Grid view",
+						"type": "grid"
+					  }
+					]
+				  },
+				  {
+					"id": "tblK6MZHez0ZvBChZ",
+					"name": "Districts",
+					"primaryFieldId": "fldEVzvQOoULO38yl",
+					"fields": [
+					  {
+						"id": "fldEVzvQOoULO38yl",
+						"name": "Name",
+						"type": "singleLineText"
+					  },
+					  {
+						"id": "fldWnCJlo2z6ttT8Y",
+						"name": "Apartments",
+						"description": "Apartments that belong to this district",
+						"type": "multipleRecordLinks",
+						"options": {
+						  "isReversed": false,
+						  "inverseLinkFieldId": "fldumZe00w09RYTW6",
+						  "linkedTableId": "tbltp8DGLhqbUmjK1",
+						  "prefersSingleRecordLink": false
+						}
+					  }
+					],
+					"views": [
+					  {
+						"id": "viwi3KXvrKug2mIBS",
+						"name": "Grid view",
+						"type": "grid"
+					  }
+					]
+				  }
+				]
+			  }`)))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       responseBody,
+			}, nil
+		},
+	}
+	_, err := a.BaseSchema("xxx")
+	if err != nil {
+		t.Errorf("base schema should not return error, got %s", err)
+	}
+
+}
+
 func TestList(t *testing.T) {
 	a := New("xxx", "yyy")
 
@@ -47,7 +181,7 @@ func TestList(t *testing.T) {
 			},
 		}
 
-		if err := a.List(Table{}, nil); err == nil {
+		if err := a.List(Parameters{}, nil); err == nil {
 			t.Errorf("table name is required, got %s", err)
 		}
 	})
@@ -67,12 +201,12 @@ func TestList(t *testing.T) {
 			},
 		}
 
-		table := Table{
+		param := Parameters{
 			Name:   "test",
 			Fields: []string{"ok", "ok2"},
 		}
 		var r AirtableList
-		if err := a.List(table, &r); err != nil {
+		if err := a.List(param, &r); err != nil {
 			t.Errorf("list should not return error, got %s", err)
 		}
 	})
@@ -92,7 +226,7 @@ func TestList(t *testing.T) {
 			},
 		}
 
-		table := Table{
+		param := Parameters{
 			Name: "test",
 			Sort: []Sort{
 				{
@@ -102,7 +236,7 @@ func TestList(t *testing.T) {
 			},
 		}
 		var r AirtableList
-		if err := a.List(table, &r); err != nil {
+		if err := a.List(param, &r); err != nil {
 			t.Errorf("list should not return error, got %s", err)
 		}
 	})
@@ -122,12 +256,12 @@ func TestList(t *testing.T) {
 			},
 		}
 
-		table := Table{
+		param := Parameters{
 			Name:            "test",
 			FilterByFormula: "ok = 'ok'",
 		}
 		var r AirtableList
-		if err := a.List(table, &r); err != nil {
+		if err := a.List(param, &r); err != nil {
 			t.Errorf("list should not return error, got %s", err)
 		}
 	})
@@ -152,7 +286,7 @@ func TestGet(t *testing.T) {
 		}
 
 		var r AirtableItem
-		if err := a.Get(Table{}, "", &r); err == nil {
+		if err := a.Get(Parameters{}, "", &r); err == nil {
 			t.Errorf("table name is required, got %s", err)
 		}
 	})
@@ -173,7 +307,7 @@ func TestGet(t *testing.T) {
 		}
 
 		var r AirtableItem
-		if err := a.Get(Table{Name: "test"}, "id", &r); err != nil {
+		if err := a.Get(Parameters{Name: "test"}, "id", &r); err != nil {
 			t.Errorf("get should not return error, got %s", err)
 		}
 	})
@@ -198,7 +332,7 @@ func TestCreate(t *testing.T) {
 		}
 
 		var r AirtableItem
-		if err := a.Create(Table{}, nil, &r); err == nil {
+		if err := a.Create(Parameters{}, nil, &r); err == nil {
 			t.Errorf("table name is required, got %s", err)
 		}
 	})
@@ -219,7 +353,7 @@ func TestCreate(t *testing.T) {
 		}
 
 		var r AirtableItem
-		if err := a.Create(Table{Name: "test"}, nil, &r); err != nil {
+		if err := a.Create(Parameters{Name: "test"}, nil, &r); err != nil {
 			t.Errorf("create should not return error, got %s", err)
 		}
 	})
@@ -244,7 +378,7 @@ func TestUpdate(t *testing.T) {
 		}
 
 		var r AirtableItem
-		if err := a.Update(Table{}, "id", nil, &r); err == nil {
+		if err := a.Update(Parameters{}, "id", nil, &r); err == nil {
 			t.Errorf("table name is required, got %s", err)
 		}
 	})
@@ -265,7 +399,7 @@ func TestUpdate(t *testing.T) {
 		}
 
 		var r AirtableItem
-		if err := a.Update(Table{Name: "test"}, "id", nil, &r); err != nil {
+		if err := a.Update(Parameters{Name: "test"}, "id", nil, &r); err != nil {
 			t.Errorf("update should not return error, got %s", err)
 		}
 	})
@@ -289,7 +423,7 @@ func TestDelete(t *testing.T) {
 			},
 		}
 
-		if err := a.Delete(Table{}, ""); err == nil {
+		if err := a.Delete(Parameters{}, ""); err == nil {
 			t.Errorf("table name is required, got %s", err)
 		}
 	})
@@ -309,7 +443,7 @@ func TestDelete(t *testing.T) {
 			},
 		}
 
-		if err := a.Delete(Table{Name: "test"}, "id"); err != nil {
+		if err := a.Delete(Parameters{Name: "test"}, "id"); err != nil {
 			t.Errorf("delete should not return error, got %s", err)
 		}
 	})
@@ -330,6 +464,26 @@ func TestCall(t *testing.T) {
 		}
 		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
 			t.Errorf("call should return error, got %s", err)
+		}
+	})
+
+	t.Run("x-airtable-client-secret", func(t *testing.T) {
+		a.SetXAPIKey("xxx")
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/" {
+					t.Errorf("Expected to request '/v0/', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusBadRequest,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+		if err := a.call(GET, &url.URL{}, nil, nil); err == nil {
+			t.Errorf("Expected to return error, got %s", err)
 		}
 	})
 

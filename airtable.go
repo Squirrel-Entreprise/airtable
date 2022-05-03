@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -30,10 +29,14 @@ const (
 )
 
 type Airtable struct {
-	apiKey string
-	base   string
+	apiKey        string
+	xClientSecret string // metadata API
+	base          string
 }
 
+// New creates a new Airtable client.
+// - apiKey: your API key
+// - base: the base to use
 func New(apiKey, base string) *Airtable {
 	return &Airtable{
 		apiKey: apiKey,
@@ -41,17 +44,15 @@ func New(apiKey, base string) *Airtable {
 	}
 }
 
-type Table struct {
-	Name       string   `json:"name"`       // table name
-	MaxRecords string   `json:"maxRecords"` // max 100
-	View       string   `json:"view"`       // Grid view
-	Fields     []string `json:"fields"`
-	UserLocale Local    `json:"userLocale"`
-	TimeZone   TimeZone `json:"timeZone"`
-
-	// https://support.airtable.com/hc/en-us/articles/203255215-Formula-Field-Reference
-	FilterByFormula string `json:"filterByFormula"`
-	Sort            []Sort `json:"sort"`
+type Parameters struct {
+	Name            string   `json:"name"`       // table name
+	MaxRecords      string   `json:"maxRecords"` // max 100
+	View            string   `json:"view"`       // Grid view
+	Fields          []string `json:"fields"`
+	UserLocale      Local    `json:"userLocale"`
+	TimeZone        TimeZone `json:"timeZone"`
+	FilterByFormula string   `json:"filterByFormula"` // https://support.airtable.com/hc/en-us/articles/203255215-Formula-Field-Reference
+	Sort            []Sort   `json:"sort"`
 }
 
 type Sort struct {
@@ -59,74 +60,137 @@ type Sort struct {
 	Direction SortDirection
 }
 
-func (a *Airtable) List(table Table, response interface{}) error {
-	if table.Name == "" {
+type Options struct {
+	IsReversed              bool   `json:"isReversed"`
+	InverseLinkFieldID      string `json:"inverseLinkFieldId"`
+	LinkedTableID           string `json:"linkedTableId"`
+	PrefersSingleRecordLink bool   `json:"prefersSingleRecordLink"`
+}
+
+type Fields struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description,omitempty"`
+	Type        string  `json:"type"`
+	Options     Options `json:"options,omitempty"`
+}
+
+type Views struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+type Tables struct {
+	Tables []Table `json:"tables"`
+}
+
+type Table struct {
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description,omitempty"`
+	PrimaryFieldID string   `json:"primaryFieldId"`
+	Fields         []Fields `json:"fields"`
+	Views          []Views  `json:"views"`
+}
+
+type Bases struct {
+	Bases []Base `json:"bases"`
+}
+
+type Base struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	PermissionLevel string `json:"permissionLevel"`
+}
+
+// SetXAPIKey sets the X-API-Key header.
+// - secret: the secret to use metadata API: https://airtable.com/api/meta
+func (a *Airtable) SetXAPIKey(secret string) {
+	a.xClientSecret = secret
+}
+
+func (a *Airtable) ListBases() (Bases, error) {
+	var bases Bases
+	p := url.URL{Path: "meta/bases"}
+	err := a.call(GET, &p, nil, &bases)
+	return bases, err
+}
+
+func (a *Airtable) BaseSchema(baseID string) (Tables, error) {
+	var schema Tables
+	p := url.URL{Path: fmt.Sprintf("meta/bases/%s/tables", baseID)}
+	err := a.call(GET, &p, nil, &schema)
+	return schema, err
+}
+
+func (a *Airtable) List(p Parameters, response interface{}) error {
+	if p.Name == "" {
 		return fmt.Errorf("table name is required")
 	}
 
 	values := url.Values{}
-	values.Add("maxRecords", table.MaxRecords)
-	values.Add("view", table.View)
+	values.Add("maxRecords", p.MaxRecords)
+	values.Add("view", p.View)
 
-	for _, f := range table.Fields {
+	for _, f := range p.Fields {
 		values.Add("fields[]", f)
 	}
 
-	for k, s := range table.Sort {
+	for k, s := range p.Sort {
 		values.Add(fmt.Sprintf("sort[%v][field]", k), s.Field)
 		values.Add(fmt.Sprintf("sort[%v][direction]", k), string(s.Direction))
 	}
 
-	if table.FilterByFormula != "" {
-		values.Add("filterByFormula", table.FilterByFormula)
+	if p.FilterByFormula != "" {
+		values.Add("filterByFormula", p.FilterByFormula)
 	}
 
-	p := url.URL{
-		Path:     fmt.Sprintf("%s/%s", a.base, table.Name),
+	path := url.URL{
+		Path:     fmt.Sprintf("%s/%s", a.base, p.Name),
 		RawQuery: values.Encode(),
 	}
 
-	return a.call(GET, &p, nil, response)
+	return a.call(GET, &path, nil, response)
 }
 
-func (a *Airtable) Get(table Table, id string, response interface{}) error {
-	if table.Name == "" {
+func (a *Airtable) Get(p Parameters, id string, response interface{}) error {
+	if p.Name == "" {
 		return fmt.Errorf("table name is required")
 	}
-	path := fmt.Sprintf("%s/%s/%s", a.base, table.Name, id)
-	p := &url.URL{Path: path}
-	return a.call(GET, p, nil, response)
+	path := &url.URL{Path: fmt.Sprintf("%s/%s/%s", a.base, p.Name, id)}
+	return a.call(GET, path, nil, response)
 }
 
-func (a *Airtable) Create(table Table, data []byte, response interface{}) error {
-	if table.Name == "" {
+func (a *Airtable) Create(p Parameters, data []byte, response interface{}) error {
+	if p.Name == "" {
 		return fmt.Errorf("table name is required")
 	}
 
-	p := url.URL{
-		Path: fmt.Sprintf("%s/%s", a.base, table.Name),
+	path := url.URL{
+		Path: fmt.Sprintf("%s/%s", a.base, p.Name),
 	}
-	return a.call(POST, &p, data, response)
+	return a.call(POST, &path, data, response)
 }
 
-func (a *Airtable) Update(table Table, id string, data []byte, response interface{}) error {
-	if table.Name == "" {
+func (a *Airtable) Update(p Parameters, id string, data []byte, response interface{}) error {
+	if p.Name == "" {
 		return fmt.Errorf("table name is required")
 	}
-	p := url.URL{
-		Path: fmt.Sprintf("%s/%s/%s", a.base, table.Name, id),
+	path := url.URL{
+		Path: fmt.Sprintf("%s/%s/%s", a.base, p.Name, id),
 	}
-	return a.call(PATCH, &p, data, response)
+	return a.call(PATCH, &path, data, response)
 }
 
-func (a *Airtable) Delete(table Table, id string) error {
-	if table.Name == "" {
+func (a *Airtable) Delete(p Parameters, id string) error {
+	if p.Name == "" {
 		return fmt.Errorf("table name is required")
 	}
-	p := url.URL{
-		Path: fmt.Sprintf("%s/%s/%s", a.base, table.Name, id),
+	path := url.URL{
+		Path: fmt.Sprintf("%s/%s/%s", a.base, p.Name, id),
 	}
-	return a.call(DELETE, &p, nil, nil)
+	return a.call(DELETE, &path, nil, nil)
 }
 
 type methodHttp string
@@ -141,11 +205,12 @@ const (
 
 func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, response interface{}) error {
 
-	log.Println(apiUrl + "/" + path.String())
-
 	req, _ := http.NewRequest(string(method), apiUrl+"/"+path.String(), bytes.NewBuffer(payload))
 
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
+	if a.xClientSecret != "" {
+		req.Header.Add("X-Airtable-Client-Secret", a.xClientSecret)
+	}
 	req.Header.Add("Content-Type", "application/json")
 
 	res, err := Client.Do(req)
@@ -208,7 +273,7 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 	}
 
 	if response != nil {
-		return json.NewDecoder(res.Body).Decode(response)
+		return json.NewDecoder(res.Body).Decode(&response)
 	}
 
 	return nil
