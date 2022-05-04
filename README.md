@@ -27,6 +27,7 @@ a := airtable.New("xxx", "yyy")
 productsParameters := airtable.Parameters{
 	Name:       "Products", // Name of the table
 	MaxRecords: "100", // Max records to return
+    PageSize:   "10",
 	View:       "Grid view", // View name
 	FilterByFormula: fmt.Sprintf(`Name="%s"`, "Apple"), // Filter by formula
 	Fields: []string{ // Fields to return

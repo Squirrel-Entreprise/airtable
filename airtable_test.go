@@ -241,6 +241,106 @@ func TestList(t *testing.T) {
 		}
 	})
 
+	t.Run("offset", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		param := Parameters{
+			Name:   "test",
+			Offset: "xxyyyzz",
+		}
+		var r AirtableList
+		if err := a.List(param, &r); err != nil {
+			t.Errorf("list should not return error, got %s", err)
+		}
+	})
+
+	t.Run("userlocale", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		param := Parameters{
+			Name:       "test",
+			UserLocale: "en-US",
+		}
+		var r AirtableList
+		if err := a.List(param, &r); err != nil {
+			t.Errorf("list should not return error, got %s", err)
+		}
+	})
+
+	t.Run("timezone", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		param := Parameters{
+			Name:     "test",
+			TimeZone: "Asia/Tokyo",
+		}
+		var r AirtableList
+		if err := a.List(param, &r); err != nil {
+			t.Errorf("list should not return error, got %s", err)
+		}
+	})
+
+	t.Run("returnfieldsbyfieldid", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		param := Parameters{
+			Name:                  "test",
+			ReturnFieldsByFieldId: "true",
+		}
+		var r AirtableList
+		if err := a.List(param, &r); err != nil {
+			t.Errorf("list should not return error, got %s", err)
+		}
+	})
+
 	t.Run("filter by formula", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
@@ -291,6 +391,69 @@ func TestGet(t *testing.T) {
 		}
 	})
 
+	t.Run("userlocale", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Get(Parameters{Name: "test", UserLocale: FR}, "id", &r); err != nil {
+			t.Errorf("get should not return error, got %s", err)
+		}
+	})
+
+	t.Run("timezone", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Get(Parameters{Name: "test", TimeZone: AfricaAbidjan}, "id", &r); err != nil {
+			t.Errorf("get should not return error, got %s", err)
+		}
+	})
+
+	t.Run("returnfieldsbyfieldid", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Get(Parameters{Name: "test", ReturnFieldsByFieldId: "true"}, "id", &r); err != nil {
+			t.Errorf("get should not return error, got %s", err)
+		}
+	})
+
 	t.Run("get", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
@@ -337,6 +500,69 @@ func TestCreate(t *testing.T) {
 		}
 	})
 
+	t.Run("userlocale", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Create(Parameters{Name: "test", UserLocale: PT}, nil, &r); err != nil {
+			t.Errorf("create should not return error, got %s", err)
+		}
+	})
+
+	t.Run("timezone", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Create(Parameters{Name: "test", TimeZone: EuropeParis}, nil, &r); err != nil {
+			t.Errorf("create should not return error, got %s", err)
+		}
+	})
+
+	t.Run("returnfieldsbyfieldid", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test" {
+					t.Errorf("Expected to request '/v0/yyy/test', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Create(Parameters{Name: "test", ReturnFieldsByFieldId: "true"}, nil, &r); err != nil {
+			t.Errorf("create should not return error, got %s", err)
+		}
+	})
+
 	t.Run("create", func(t *testing.T) {
 		Client = &MockClient{
 			DoFunc: func(req *http.Request) (*http.Response, error) {
@@ -380,6 +606,69 @@ func TestUpdate(t *testing.T) {
 		var r AirtableItem
 		if err := a.Update(Parameters{}, "id", nil, &r); err == nil {
 			t.Errorf("table name is required, got %s", err)
+		}
+	})
+
+	t.Run("userlocale", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Update(Parameters{Name: "test", UserLocale: AR}, "id", nil, &r); err != nil {
+			t.Errorf("update should not return error, got %s", err)
+		}
+	})
+
+	t.Run("timezone", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Update(Parameters{Name: "test", TimeZone: AfricaAccra}, "id", nil, &r); err != nil {
+			t.Errorf("update should not return error, got %s", err)
+		}
+	})
+
+	t.Run("returnfieldsbyfieldid", func(t *testing.T) {
+		Client = &MockClient{
+			DoFunc: func(req *http.Request) (*http.Response, error) {
+				if req.URL.Path != "/v0/yyy/test/id" {
+					t.Errorf("Expected to request '/v0/yyy/test/id', got: %s", req.URL.Path)
+				}
+
+				responseBody := ioutil.NopCloser(bytes.NewReader([]byte(`{"value":"fixed"}`)))
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       responseBody,
+				}, nil
+			},
+		}
+
+		var r AirtableItem
+		if err := a.Update(Parameters{Name: "test", ReturnFieldsByFieldId: "true"}, "id", nil, &r); err != nil {
+			t.Errorf("update should not return error, got %s", err)
 		}
 	})
 

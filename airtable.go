@@ -45,14 +45,17 @@ func New(apiKey, base string) *Airtable {
 }
 
 type Parameters struct {
-	Name            string   `json:"name"`       // table name
-	MaxRecords      string   `json:"maxRecords"` // max 100
-	View            string   `json:"view"`       // Grid view
-	Fields          []string `json:"fields"`
-	UserLocale      Local    `json:"userLocale"`
-	TimeZone        TimeZone `json:"timeZone"`
-	FilterByFormula string   `json:"filterByFormula"` // https://support.airtable.com/hc/en-us/articles/203255215-Formula-Field-Reference
-	Sort            []Sort   `json:"sort"`
+	Name                  string   `json:"name"`                  // table name
+	MaxRecords            string   `json:"maxRecords"`            // The maximum total number of records that will be returned in your requests. If this value is larger than pageSize (which is 100 by default), you may have to load multiple pages to reach this total. See the Pagination section below for more.
+	PageSize              string   `json:"pageSize"`              // The number of records returned in each request. Must be less than or equal to 100. Default is 100. See the Pagination section below for more.
+	View                  string   `json:"view"`                  // The name or ID of a view in the table. If set, only the records in that view will be returned. The records will be sorted according to the order of the view unless the sort parameter is included, which overrides that order. Fields hidden in this view will be returned in the results. To only return a subset of fields, use the fields parameter.
+	Fields                []string `json:"fields"`                // Only data for fields whose names are in this list will be included in the result. If you don't need every field, you can use this parameter to reduce the amount of data transferred.
+	UserLocale            Local    `json:"userLocale"`            // The user locale that should be used to format dates when using string as the cellFormat. This parameter is required when using string as the cellFormat.
+	TimeZone              TimeZone `json:"timeZone"`              // The time zone that should be used to format dates when using string as the cellFormat. This parameter is required when using string as the cellFormat.
+	FilterByFormula       string   `json:"filterByFormula"`       // A formula used to filter records. The formula will be evaluated for each record, and if the result is not 0, false, "", NaN, [], or #Error! the record will be included in the response. If combined with the view parameter, only records in that view which satisfy the formula will be returned.https://support.airtable.com/hc/en-us/articles/203255215-Formula-Field-Reference
+	Sort                  []Sort   `json:"sort"`                  // A list of sort objects that specifies how the records will be ordered. Each sort object must have a field key specifying the name of the field to sort on, and an optional direction key that is either "asc" or "desc". The default direction is "asc".
+	ReturnFieldsByFieldId string   `json:"returnFieldsByFieldId"` // An optional boolean value that lets you return field objects where the key is the field id. This defaults to false, which returns field objects where the key is the field name.
+	Offset                string   `json:"offset"`                // The server returns one page of records at a time. Each page will contain pageSize records, which is 100 by default. If there are more records, the response will contain an offset. To fetch the next page of records, include offset in the next request's parameters. Pagination will stop when you've reached the end of your table. If the maxRecords parameter is passed, pagination will stop once you've reached this maximum.
 }
 
 type Sort struct {
@@ -130,7 +133,30 @@ func (a *Airtable) List(p Parameters, response interface{}) error {
 	}
 
 	values := url.Values{}
+	if p.MaxRecords == "" {
+		p.MaxRecords = "100"
+	}
+
+	if p.PageSize == "" {
+		p.PageSize = "100"
+	}
+
+	if p.Offset != "" {
+		values.Add("offset", p.Offset)
+	}
+
+	if p.UserLocale != "" {
+		values.Add("userLocale", string(p.UserLocale))
+	}
+	if p.TimeZone != "" {
+		values.Add("timeZone", string(p.TimeZone))
+	}
+	if p.ReturnFieldsByFieldId != "" {
+		values.Add("returnFieldsByFieldId", p.ReturnFieldsByFieldId)
+	}
+
 	values.Add("maxRecords", p.MaxRecords)
+	values.Add("pageSize", p.PageSize)
 	values.Add("view", p.View)
 
 	for _, f := range p.Fields {
@@ -158,7 +184,23 @@ func (a *Airtable) Get(p Parameters, id string, response interface{}) error {
 	if p.Name == "" {
 		return fmt.Errorf("table name is required")
 	}
-	path := &url.URL{Path: fmt.Sprintf("%s/%s/%s", a.base, p.Name, id)}
+
+	values := url.Values{}
+	if p.UserLocale != "" {
+		values.Add("userLocale", string(p.UserLocale))
+	}
+	if p.TimeZone != "" {
+		values.Add("timeZone", string(p.TimeZone))
+	}
+	if p.ReturnFieldsByFieldId != "" {
+		values.Add("returnFieldsByFieldId", p.ReturnFieldsByFieldId)
+	}
+
+	path := &url.URL{
+		Path:     fmt.Sprintf("%s/%s/%s", a.base, p.Name, id),
+		RawQuery: values.Encode(),
+	}
+
 	return a.call(GET, path, nil, response)
 }
 
@@ -167,8 +209,20 @@ func (a *Airtable) Create(p Parameters, data []byte, response interface{}) error
 		return fmt.Errorf("table name is required")
 	}
 
+	values := url.Values{}
+	if p.UserLocale != "" {
+		values.Add("userLocale", string(p.UserLocale))
+	}
+	if p.TimeZone != "" {
+		values.Add("timeZone", string(p.TimeZone))
+	}
+	if p.ReturnFieldsByFieldId != "" {
+		values.Add("returnFieldsByFieldId", p.ReturnFieldsByFieldId)
+	}
+
 	path := url.URL{
-		Path: fmt.Sprintf("%s/%s", a.base, p.Name),
+		Path:     fmt.Sprintf("%s/%s", a.base, p.Name),
+		RawQuery: values.Encode(),
 	}
 	return a.call(POST, &path, data, response)
 }
@@ -177,8 +231,21 @@ func (a *Airtable) Update(p Parameters, id string, data []byte, response interfa
 	if p.Name == "" {
 		return fmt.Errorf("table name is required")
 	}
+
+	values := url.Values{}
+	if p.UserLocale != "" {
+		values.Add("userLocale", string(p.UserLocale))
+	}
+	if p.TimeZone != "" {
+		values.Add("timeZone", string(p.TimeZone))
+	}
+	if p.ReturnFieldsByFieldId != "" {
+		values.Add("returnFieldsByFieldId", p.ReturnFieldsByFieldId)
+	}
+
 	path := url.URL{
-		Path: fmt.Sprintf("%s/%s/%s", a.base, p.Name, id),
+		Path:     fmt.Sprintf("%s/%s/%s", a.base, p.Name, id),
+		RawQuery: values.Encode(),
 	}
 	return a.call(PATCH, &path, data, response)
 }
