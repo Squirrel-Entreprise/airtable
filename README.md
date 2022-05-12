@@ -1,9 +1,25 @@
-Simple pure Go Airtable API wrapper
+Golang Airtable API
 ================
 [![GoDoc](https://godoc.org/github.com/Squirrel-Entreprise/airtable?status.svg)](https://pkg.go.dev/github.com/Squirrel-Entreprise/airtable)
 ![Go](https://github.com/Squirrel-Entreprise/airtable/workflows/Go/badge.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/Squirrel-Entreprise/airtable)
 [![codecov](https://codecov.io/gh/Squirrel-Entreprise/airtable/branch/main/graph/badge.svg)](https://codecov.io/gh/Squirrel-Entreprise/airtable)
+
+A #golang package to access the [Airtable API](https://airtable.com/api).
+
+Table of contents
+===
+- [Golang Airtable API](#golang-airtable-api)
+- [Table of contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Installation](#installation)
+  - [Aitable API](#aitable-api)
+  - [Getting started](#getting-started)
+    - [List table records](#list-table-records)
+    - [Get table record](#get-table-record)
+    - [Create table record](#create-table-record)
+    - [Update table record](#update-table-record)
+    - [Delete table record](#delete-table-record)
 
 ## Installation
 
@@ -16,7 +32,7 @@ Simple pure Go Airtable API wrapper
 Airtable uses simple token-based authentication. To generate or manage your API key, visit your [account](https://airtable.com/account) page.
 
 ## Getting started 
-
+Initialize client
 ```go
 a := airtable.New("xxx", "yyy")
 ```
@@ -27,7 +43,7 @@ a := airtable.New("xxx", "yyy")
 productsParameters := airtable.Parameters{
 	Name:       "Products", // Name of the table
 	MaxRecords: "100", // Max records to return
-    PageSize:   "10",
+    	PageSize:   "10",
 	View:       "Grid view", // View name
 	FilterByFormula: fmt.Sprintf(`Name="%s"`, "Apple"), // Filter by formula
 	Fields: []string{ // Fields to return
