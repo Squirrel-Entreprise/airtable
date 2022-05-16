@@ -335,7 +335,7 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 
 	if res.StatusCode == http.StatusUnauthorized {
 		errStr := decodeJSONError(res.Body)
-		return fmt.Errorf("accessing a protected resource without authorization or with invalid credentials: %s", errStr)
+		return fmt.Errorf("accessing a protected resource without authorization or with invalid credentials: \"%s\"", errStr)
 	}
 
 	if res.StatusCode == http.StatusPaymentRequired {
@@ -344,7 +344,7 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 
 	if res.StatusCode == http.StatusForbidden {
 		errStr := decodeJSONError(res.Body)
-		return fmt.Errorf("accessing a protected resource with API credentials that don't have access to that resource: %s", errStr)
+		return fmt.Errorf("accessing a protected resource with API credentials that don't have access to that resource: \"%s\"", errStr)
 	}
 
 	if res.StatusCode == http.StatusNotFound {
