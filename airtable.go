@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -282,11 +281,11 @@ type DetailedError struct {
 	} `json:"error"`
 }
 
-func decodeJSONError(resBodyReader io.Reader) string {
+func decodeJSONError(response *http.Response) string {
 	var err error
 
 	bodyBytes := make([]byte, 1024*64) // being WAAAAY safe allowing for 64K
-	resBodyReader.Read(bodyBytes)
+	response.Body.Read(bodyBytes)
 	bodyBytes = bytes.Trim(bodyBytes, "\x00")
 
 	var detailedErr DetailedError
@@ -334,7 +333,7 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 	}
 
 	if res.StatusCode == http.StatusUnauthorized {
-		errStr := decodeJSONError(res.Body)
+		errStr := decodeJSONError(res)
 		return fmt.Errorf("accessing a protected resource without authorization or with invalid credentials: \"%s\"", errStr)
 	}
 
@@ -343,12 +342,12 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 	}
 
 	if res.StatusCode == http.StatusForbidden {
-		errStr := decodeJSONError(res.Body)
+		errStr := decodeJSONError(res)
 		return fmt.Errorf("accessing a protected resource with API credentials that don't have access to that resource: \"%s\"", errStr)
 	}
 
 	if res.StatusCode == http.StatusNotFound {
-		errStr := decodeJSONError(res.Body)
+		errStr := decodeJSONError(res)
 		return fmt.Errorf("route or resource is not found. This error is returned when the request hits an undefined route, or if the resource doesn't exist (e.g. has been deleted): \"%s\"", errStr)
 	}
 
@@ -357,7 +356,7 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 	}
 
 	if res.StatusCode == http.StatusUnprocessableEntity {
-		errStr := decodeJSONError(res.Body)
+		errStr := decodeJSONError(res)
 		return fmt.Errorf("the request data is invalid. This includes most of the base-specific validations. You will receive a detailed error message and code pointing to the exact issue, \"%s\"", errStr)
 	}
 
