@@ -270,6 +270,39 @@ const (
 	DELETE methodHttp = http.MethodDelete
 )
 
+type GeneralError struct {
+	Error string `json:"error"`
+}
+
+type DetailedError struct {
+	Error struct {
+		Message string `json:"message"`
+		Type    string `json:"type"`
+	} `json:"error"`
+}
+
+func decodeJSONError(response *http.Response) string {
+	var err error
+
+	bodyBytes := make([]byte, 1024*64) // being WAAAAY safe allowing for 64K
+	response.Body.Read(bodyBytes)
+	bodyBytes = bytes.Trim(bodyBytes, "\x00")
+
+	var detailedErr DetailedError
+	err = json.Unmarshal(bodyBytes, &detailedErr)
+	if err == nil {
+		return detailedErr.Error.Message + ", " + detailedErr.Error.Type
+	}
+
+	var generalErr GeneralError
+	err = json.Unmarshal(bodyBytes, &generalErr)
+	if err == nil {
+		return generalErr.Error
+	}
+
+	return string(bodyBytes)
+}
+
 func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, response interface{}) error {
 
 	req, _ := http.NewRequest(string(method), apiUrl+"/"+path.String(), bytes.NewBuffer(payload))
@@ -300,7 +333,8 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 	}
 
 	if res.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("accessing a protected resource without authorization or with invalid credentials")
+		errStr := decodeJSONError(res)
+		return fmt.Errorf("accessing a protected resource without authorization or with invalid credentials: \"%s\"", errStr)
 	}
 
 	if res.StatusCode == http.StatusPaymentRequired {
@@ -308,11 +342,13 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 	}
 
 	if res.StatusCode == http.StatusForbidden {
-		return fmt.Errorf("accessing a protected resource with API credentials that don't have access to that resource")
+		errStr := decodeJSONError(res)
+		return fmt.Errorf("accessing a protected resource with API credentials that don't have access to that resource: \"%s\"", errStr)
 	}
 
 	if res.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("route or resource is not found. This error is returned when the request hits an undefined route, or if the resource doesn't exist (e.g. has been deleted)")
+		errStr := decodeJSONError(res)
+		return fmt.Errorf("route or resource is not found. This error is returned when the request hits an undefined route, or if the resource doesn't exist (e.g. has been deleted): \"%s\"", errStr)
 	}
 
 	if res.StatusCode == http.StatusRequestEntityTooLarge {
@@ -320,7 +356,8 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 	}
 
 	if res.StatusCode == http.StatusUnprocessableEntity {
-		return fmt.Errorf("the request data is invalid. This includes most of the base-specific validations. You will receive a detailed error message and code pointing to the exact issue")
+		errStr := decodeJSONError(res)
+		return fmt.Errorf("the request data is invalid. This includes most of the base-specific validations. You will receive a detailed error message and code pointing to the exact issue, \"%s\"", errStr)
 	}
 
 	if res.StatusCode == http.StatusInternalServerError {
