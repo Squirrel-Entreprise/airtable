@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"time"
 )
@@ -32,15 +34,17 @@ type Airtable struct {
 	apiKey        string
 	xClientSecret string // metadata API
 	base          string
+	debug         bool
 }
 
 // New creates a new Airtable client.
 // - apiKey: your API key
 // - base: the base to use
-func New(apiKey, base string) *Airtable {
+func New(apiKey, base string, debug bool) *Airtable {
 	return &Airtable{
 		apiKey: apiKey,
 		base:   base,
+		debug:  debug,
 	}
 }
 
@@ -304,7 +308,6 @@ func decodeJSONError(response *http.Response) string {
 }
 
 func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, response interface{}) error {
-
 	req, _ := http.NewRequest(string(method), apiUrl+"/"+path.String(), bytes.NewBuffer(payload))
 
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
@@ -312,6 +315,11 @@ func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, respon
 		req.Header.Add("X-Airtable-Client-Secret", a.xClientSecret)
 	}
 	req.Header.Add("Content-Type", "application/json")
+
+	if a.debug {
+		dump, _ := httputil.DumpRequest(req, true)
+		log.Println(string(dump))
+	}
 
 	res, err := Client.Do(req)
 	if err != nil {

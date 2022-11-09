@@ -18,7 +18,7 @@ func (m *MockClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 func TestNew(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 
 	if a.apiKey != "xxx" {
 		t.Errorf("apiKey should be xxx, got %s", a.apiKey)
@@ -30,13 +30,13 @@ func TestNew(t *testing.T) {
 }
 
 func TestSetXAPIKey(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 
 	a.SetXAPIKey("xxx")
 }
 
 func TestListBases(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 	Client = &MockClient{
 		DoFunc: func(req *http.Request) (*http.Response, error) {
 			if req.URL.Path != "/v0/meta/bases" {
@@ -67,11 +67,10 @@ func TestListBases(t *testing.T) {
 	if err != nil {
 		t.Errorf("list bases should not return error, got %s", err)
 	}
-
 }
 
 func TestBaseSchema(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 	Client = &MockClient{
 		DoFunc: func(req *http.Request) (*http.Response, error) {
 			if req.URL.Path != "/v0/meta/bases/xxx/tables" {
@@ -160,11 +159,10 @@ func TestBaseSchema(t *testing.T) {
 	if err != nil {
 		t.Errorf("base schema should not return error, got %s", err)
 	}
-
 }
 
 func TestList(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 
 	t.Run("empty table name", func(t *testing.T) {
 		Client = &MockClient{
@@ -368,7 +366,7 @@ func TestList(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 
 	t.Run("empty table name", func(t *testing.T) {
 		Client = &MockClient{
@@ -477,7 +475,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 
 	t.Run("empty table name", func(t *testing.T) {
 		Client = &MockClient{
@@ -586,7 +584,7 @@ func TestCreate(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 
 	t.Run("empty table name", func(t *testing.T) {
 		Client = &MockClient{
@@ -695,7 +693,7 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 
 	t.Run("empty table name", func(t *testing.T) {
 		Client = &MockClient{
@@ -739,7 +737,7 @@ func TestDelete(t *testing.T) {
 }
 
 func TestCall(t *testing.T) {
-	a := New("xxx", "yyy")
+	a := New("xxx", "yyy", true)
 
 	t.Run("client_do", func(t *testing.T) {
 		Client = &MockClient{
