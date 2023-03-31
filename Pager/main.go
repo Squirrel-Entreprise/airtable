@@ -39,7 +39,7 @@ func (p *ListPager) Next() (records []airtable.AirtableItem, err error) {
 		return nil, ErrEOL
 	}
 
-	// set params with last offset, clear lo's offset
+	// set params with last offset (if any), clear lo's offset
 	p.pm.Offset, p.lo.Offset = p.lo.Offset, ""
 	if err := p.at.List(p.pm, &p.lo); err != nil {
 		return nil, err
