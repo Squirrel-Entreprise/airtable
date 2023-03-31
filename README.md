@@ -17,6 +17,7 @@ A #golang package to access the [Airtable API](https://airtable.com/api).
   - [Aitable API](#aitable-api)
   - [Getting started](#getting-started)
     - [List table records](#list-table-records)
+    - [Pagination, and ListPager](#pagination-and-listpager)
     - [Get table record](#get-table-record)
     - [Create table record](#create-table-record)
     - [Update table record](#update-table-record)
@@ -72,7 +73,7 @@ for _, p := range products.Records {
 }
 ```
 
-#### Pagination
+### Pagination, and ListPager
 
 If you make a request that needs to return more records than fits in a _page_ (determined by Parameters.PageSize), the response AirtableList's Offset field will be non-empty.
 
