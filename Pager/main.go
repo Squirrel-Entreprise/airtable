@@ -14,98 +14,57 @@ const (
 	tblID = "Table_1"
 )
 
-var (
-	apiKey string
+var ErrEOL = errors.New("no more pages in list")
 
-	// a  *airtable.Airtable
-	// p  airtable.Parameters
-	// lo airtable.AirtableList
-	// o  string
-)
-
-const initOffset = "InitialOffset" // Need a non-empty value for first iteration
-
-func init() {
-	b, _ := os.ReadFile(".secret.txt")
-	apiKey = string(b)
-
-	// a = airtable.New(apiKey, appID, false)
-	// p = airtable.Parameters{
-	// 	Name:       tblID,
-	// 	MaxRecords: "10",
-	// 	PageSize:   "3",
-	// }
-	// o = initOffset
-}
-
+// A ListPager iterates the pages of a list by tracking
+// page offsets.
 type ListPager struct {
 	at *airtable.Airtable
 	pm airtable.Parameters
-	lo airtable.AirtableList
+	lo airtable.AirtableList // "list object"
 
-	o string
+	done bool // track last page
 }
 
-func NewListPager(at *airtable.Airtable, pm airtable.Parameters, lo airtable.AirtableList) *ListPager {
-	return &ListPager{at, pm, lo, initOffset}
+func NewListPager(at *airtable.Airtable, pm airtable.Parameters) *ListPager {
+	return &ListPager{at, pm, airtable.AirtableList{}, false}
 }
 
-var ErrEOL = errors.New("no more pages in list")
-
-func (lp *ListPager) Next() (records []airtable.AirtableItem, err error) {
-	switch lp.o {
-	case "":
+// Next fetches the next available page from at.List(...) and returns
+// the slice of records.
+// If the list has been exhausted—no more pages—Next returns nil, ErrEOL.
+func (p *ListPager) Next() (records []airtable.AirtableItem, err error) {
+	if p.done {
 		return nil, ErrEOL
-	case initOffset:
-		lp.o = ""
 	}
 
-	lp.pm.Offset = lp.o
-	lp.lo.Offset = "" // lo.Offset must be reset everytime
-	if err := lp.at.List(lp.pm, &lp.lo); err != nil {
+	// set params with last offset, clear lo's offset
+	p.pm.Offset, p.lo.Offset = p.lo.Offset, ""
+	if err := p.at.List(p.pm, &p.lo); err != nil {
 		return nil, err
 	}
-	lp.o = lp.lo.Offset
 
-	return lp.lo.Records, nil
+	p.done = p.lo.Offset == ""
+
+	return p.lo.Records, nil
 }
 
 func (p *ListPager) Offset() string {
-	return p.o
+	return p.lo.Offset
 }
-
-/*
-func next() error {
-	switch o {
-	case "":
-		return ErrEOL
-	case initOffset:
-		o = ""
-	}
-
-	p.Offset = o
-	lo.Offset = "" // lo.Offset must be reset everytime
-	if err := a.List(p, &lo); err != nil {
-		return err
-	}
-	o = lo.Offset
-
-	return nil
-}
-*/
 
 func main() {
-	var (
-		a = airtable.New(apiKey, appID, false)
-		p = airtable.Parameters{
-			Name: tblID,
-			// MaxRecords: "10",
-			// PageSize:   "3",
-		}
-		l airtable.AirtableList
-	)
+	b, _ := os.ReadFile(".secret.txt")
+	apiKey := string(b)
 
-	pgr := NewListPager(a, p, l)
+	at := airtable.New(apiKey, appID, false)
+	pm := airtable.Parameters{
+		Name:       tblID,
+		MaxRecords: "10",
+		PageSize:   "3",
+	}
+
+	pgr := NewListPager(at, pm)
 	for {
 		records, err := pgr.Next()
 		if err != nil {
@@ -114,30 +73,10 @@ func main() {
 			}
 			log.Fatal(err)
 		}
+
 		fmt.Println("o:", pgr.Offset())
 		for _, record := range records {
 			fmt.Println("  r:", record.ID)
 		}
 	}
 }
-
-/* using next()
-func main() {
-	for {
-		if err := next(); err != nil {
-			if err == ErrEOL {
-				break
-			}
-			log.Fatal(err)
-		}
-		printLO()
-	}
-}
-
-func printLO() {
-	fmt.Println("o:", lo.Offset)
-	for _, record := range lo.Records {
-		fmt.Println("  r:", record.ID)
-	}
-}
-*/
