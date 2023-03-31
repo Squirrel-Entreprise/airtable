@@ -30,9 +30,10 @@ func NewListPager(at *airtable.Airtable, pm airtable.Parameters) *ListPager {
 	return &ListPager{at, pm, airtable.AirtableList{}, false}
 }
 
-// Next fetches the next available page from at.List(...) and returns
-// the slice of records.
-// If the list has been exhausted—no more pages—Next returns nil, ErrEOL.
+// Next fetches the next available page from at.List(...) and
+// returns the slice of records.
+// If the list has been exhausted (no more pages)
+// Next returns nil, ErrEOL.
 func (p *ListPager) Next() (records []airtable.AirtableItem, err error) {
 	if p.done {
 		return nil, ErrEOL
