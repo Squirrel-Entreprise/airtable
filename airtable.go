@@ -3,6 +3,7 @@ package airtable
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -428,6 +429,46 @@ type AirtableItem struct {
 type AirtableList struct {
 	Records []AirtableItem `json:"records"`
 	Offset  string         `json:"offset"`
+}
+
+var ErrEOL = errors.New("no more pages in list")
+
+// A ListPager iterates the pages of a list by tracking
+// page offsets.
+type ListPager struct {
+	at *Airtable
+	pm Parameters
+	lo AirtableList // "list object"
+
+	done bool // track last page
+}
+
+func NewListPager(at *Airtable, pm Parameters) *ListPager {
+	return &ListPager{at, pm, AirtableList{}, false}
+}
+
+// Next fetches the next available page from at.List(...) and
+// returns the slice of records.
+// If the list has been exhausted (no more pages)
+// Next returns nil, ErrEOL.
+func (p *ListPager) Next() (records []AirtableItem, err error) {
+	if p.done {
+		return nil, ErrEOL
+	}
+
+	// set params with last offset (if any), clear lo's offset
+	p.pm.Offset, p.lo.Offset = p.lo.Offset, ""
+	if err := p.at.List(p.pm, &p.lo); err != nil {
+		return nil, err
+	}
+
+	p.done = p.lo.Offset == ""
+
+	return p.lo.Records, nil
+}
+
+func (p *ListPager) Offset() string {
+	return p.lo.Offset
 }
 
 // https://support.airtable.com/hc/en-us/articles/220340268-Supported-locale-modifiers-for-SET-LOCALE
