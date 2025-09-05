@@ -2,50 +2,102 @@ package airtable
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"math"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"time"
 )
 
+// HTTPClient interface allows mocking HTTP requests
 type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-var (
-	Client  HTTPClient
-	attempt int
-)
+// ClientOptions contains client configuration options
+type ClientOptions struct {
+	Timeout       time.Duration
+	MaxRetries    int
+	RetryDelay    time.Duration
+	MaxRetryDelay time.Duration
+	UserAgent     string
+	Debug         bool
+}
 
-func init() {
-	Client = &http.Client{
-		Timeout: time.Second * 30,
+// DefaultClientOptions returns default options
+type DefaultClientOptions struct{}
+
+func (d DefaultClientOptions) Get() ClientOptions {
+	return ClientOptions{
+		Timeout:       30 * time.Second,
+		MaxRetries:    3,
+		RetryDelay:    time.Second,
+		MaxRetryDelay: 30 * time.Second,
+		UserAgent:     "go-airtable-client/2.0",
+		Debug:         false,
 	}
 }
 
-const (
-	apiUrl = "https://api.airtable.com/v0"
+var (
+	Client HTTPClient
 )
 
+const (
+	apiURL = "https://api.airtable.com/v0"
+	// Error constants
+	tableNameRequired = "table name is required"
+	apiKeyRequired    = "API key is required"
+	baseIDRequired    = "base ID is required"
+)
+
+// Airtable represents the main client for interacting with the Airtable API
 type Airtable struct {
 	apiKey        string
 	xClientSecret string // metadata API
 	base          string
-	debug         bool
+	options       ClientOptions
+	httpClient    HTTPClient
 }
 
-// New creates a new Airtable client.
-// - apiKey: your API key
-// - base: the base to use
+// New creates a new Airtable client with default options
+// - apiKey: your Airtable API key
+// - base: the base ID to use
+// - debug: enables debug mode for logging
 func New(apiKey, base string, debug bool) *Airtable {
+	options := DefaultClientOptions{}.Get()
+	options.Debug = debug
+
 	return &Airtable{
-		apiKey: apiKey,
-		base:   base,
-		debug:  debug,
+		apiKey:     apiKey,
+		base:       base,
+		options:    options,
+		httpClient: &http.Client{Timeout: options.Timeout},
+	}
+}
+
+// NewWithOptions creates a new Airtable client with custom options
+func NewWithOptions(apiKey, base string, options ClientOptions) *Airtable {
+	return &Airtable{
+		apiKey:     apiKey,
+		base:       base,
+		options:    options,
+		httpClient: &http.Client{Timeout: options.Timeout},
+	}
+}
+
+// NewWithHTTPClient creates a new Airtable client with a custom HTTP client
+func NewWithHTTPClient(apiKey, base string, httpClient HTTPClient, options ClientOptions) *Airtable {
+	return &Airtable{
+		apiKey:     apiKey,
+		base:       base,
+		options:    options,
+		httpClient: httpClient,
 	}
 }
 
@@ -118,38 +170,68 @@ func (a *Airtable) SetXAPIKey(secret string) {
 	a.xClientSecret = secret
 }
 
+// ListBases retrieves the list of accessible bases
 func (a *Airtable) ListBases() (Bases, error) {
+	return a.ListBasesWithContext(context.Background())
+}
+
+// ListBasesWithContext retrieves the list of accessible bases with context
+func (a *Airtable) ListBasesWithContext(ctx context.Context) (Bases, error) {
+	if a.apiKey == "" {
+		return Bases{}, ErrAPIKeyRequired
+	}
+
 	var bases Bases
 	p := url.URL{Path: "meta/bases"}
-	err := a.call(GET, &p, nil, &bases)
+	err := a.call(ctx, GET, &p, nil, &bases)
 	return bases, err
 }
 
+// BaseSchema retrieves the schema of a base
 func (a *Airtable) BaseSchema(baseID string) (Tables, error) {
+	return a.BaseSchemaWithContext(context.Background(), baseID)
+}
+
+// BaseSchemaWithContext retrieves the schema of a base with context
+func (a *Airtable) BaseSchemaWithContext(ctx context.Context, baseID string) (Tables, error) {
+	if a.apiKey == "" {
+		return Tables{}, ErrAPIKeyRequired
+	}
+	if baseID == "" {
+		return Tables{}, ErrBaseIDRequired
+	}
+
 	var schema Tables
 	p := url.URL{Path: fmt.Sprintf("meta/bases/%s/tables", baseID)}
-	err := a.call(GET, &p, nil, &schema)
+	err := a.call(ctx, GET, &p, nil, &schema)
 	return schema, err
 }
 
+// List retrieves a list of records from a table
 func (a *Airtable) List(p Parameters, response interface{}) error {
-	if p.Name == "" {
-		return fmt.Errorf("table name is required")
+	return a.ListWithContext(context.Background(), p, response)
+}
+
+// ListWithContext retrieves a list of records from a table with context
+func (a *Airtable) ListWithContext(ctx context.Context, p Parameters, response interface{}) error {
+	if err := a.validateRequest(p.Name); err != nil {
+		return err
 	}
 
 	values := url.Values{}
+
+	// Default values
 	if p.MaxRecords == "" {
 		p.MaxRecords = "100"
 	}
-
 	if p.PageSize == "" {
 		p.PageSize = "100"
 	}
 
+	// Add parameters
 	if p.Offset != "" {
 		values.Add("offset", p.Offset)
 	}
-
 	if p.UserLocale != "" {
 		values.Add("userLocale", string(p.UserLocale))
 	}
@@ -159,22 +241,25 @@ func (a *Airtable) List(p Parameters, response interface{}) error {
 	if p.ReturnFieldsByFieldId != "" {
 		values.Add("returnFieldsByFieldId", p.ReturnFieldsByFieldId)
 	}
+	if p.View != "" {
+		values.Add("view", p.View)
+	}
+	if p.FilterByFormula != "" {
+		values.Add("filterByFormula", p.FilterByFormula)
+	}
 
 	values.Add("maxRecords", p.MaxRecords)
 	values.Add("pageSize", p.PageSize)
-	values.Add("view", p.View)
 
+	// Ajouter les champs
 	for _, f := range p.Fields {
 		values.Add("fields[]", f)
 	}
 
+	// Ajouter les tris
 	for k, s := range p.Sort {
 		values.Add(fmt.Sprintf("sort[%v][field]", k), s.Field)
 		values.Add(fmt.Sprintf("sort[%v][direction]", k), string(s.Direction))
-	}
-
-	if p.FilterByFormula != "" {
-		values.Add("filterByFormula", p.FilterByFormula)
 	}
 
 	path := url.URL{
@@ -182,12 +267,21 @@ func (a *Airtable) List(p Parameters, response interface{}) error {
 		RawQuery: values.Encode(),
 	}
 
-	return a.call(GET, &path, nil, response)
+	return a.call(ctx, GET, &path, nil, response)
 }
 
+// Get retrieves a specific record by its ID
 func (a *Airtable) Get(p Parameters, id string, response interface{}) error {
-	if p.Name == "" {
-		return fmt.Errorf("table name is required")
+	return a.GetWithContext(context.Background(), p, id, response)
+}
+
+// GetWithContext retrieves a specific record by its ID with context
+func (a *Airtable) GetWithContext(ctx context.Context, p Parameters, id string, response interface{}) error {
+	if err := a.validateRequest(p.Name); err != nil {
+		return err
+	}
+	if id == "" {
+		return &AirtableError{StatusCode: 400, Message: "record ID is required", Type: "validation_error"}
 	}
 
 	values := url.Values{}
@@ -206,12 +300,18 @@ func (a *Airtable) Get(p Parameters, id string, response interface{}) error {
 		RawQuery: values.Encode(),
 	}
 
-	return a.call(GET, path, nil, response)
+	return a.call(ctx, GET, path, nil, response)
 }
 
+// Create creates a new record in the table
 func (a *Airtable) Create(p Parameters, data []byte, response interface{}) error {
-	if p.Name == "" {
-		return fmt.Errorf("table name is required")
+	return a.CreateWithContext(context.Background(), p, data, response)
+}
+
+// CreateWithContext creates a new record in the table with context
+func (a *Airtable) CreateWithContext(ctx context.Context, p Parameters, data []byte, response interface{}) error {
+	if err := a.validateRequest(p.Name); err != nil {
+		return err
 	}
 
 	values := url.Values{}
@@ -229,12 +329,21 @@ func (a *Airtable) Create(p Parameters, data []byte, response interface{}) error
 		Path:     fmt.Sprintf("%s/%s", a.base, p.Name),
 		RawQuery: values.Encode(),
 	}
-	return a.call(POST, &path, data, response)
+	return a.call(ctx, POST, &path, data, response)
 }
 
+// Update updates an existing record
 func (a *Airtable) Update(p Parameters, id string, data []byte, response interface{}) error {
-	if p.Name == "" {
-		return fmt.Errorf("table name is required")
+	return a.UpdateWithContext(context.Background(), p, id, data, response)
+}
+
+// UpdateWithContext updates an existing record with context
+func (a *Airtable) UpdateWithContext(ctx context.Context, p Parameters, id string, data []byte, response interface{}) error {
+	if err := a.validateRequest(p.Name); err != nil {
+		return err
+	}
+	if id == "" {
+		return &AirtableError{StatusCode: 400, Message: "record ID is required", Type: "validation_error"}
 	}
 
 	values := url.Values{}
@@ -252,17 +361,27 @@ func (a *Airtable) Update(p Parameters, id string, data []byte, response interfa
 		Path:     fmt.Sprintf("%s/%s/%s", a.base, p.Name, id),
 		RawQuery: values.Encode(),
 	}
-	return a.call(PATCH, &path, data, response)
+	return a.call(ctx, PATCH, &path, data, response)
 }
 
+// Delete supprime un enregistrement
 func (a *Airtable) Delete(p Parameters, id string) error {
-	if p.Name == "" {
-		return fmt.Errorf("table name is required")
+	return a.DeleteWithContext(context.Background(), p, id)
+}
+
+// DeleteWithContext supprime un enregistrement avec contexte
+func (a *Airtable) DeleteWithContext(ctx context.Context, p Parameters, id string) error {
+	if err := a.validateRequest(p.Name); err != nil {
+		return err
 	}
+	if id == "" {
+		return &AirtableError{StatusCode: 400, Message: "record ID is required", Type: "validation_error"}
+	}
+
 	path := url.URL{
 		Path: fmt.Sprintf("%s/%s/%s", a.base, p.Name, id),
 	}
-	return a.call(DELETE, &path, nil, nil)
+	return a.call(ctx, DELETE, &path, nil, nil)
 }
 
 type methodHttp string
@@ -273,6 +392,34 @@ const (
 	PUT    methodHttp = http.MethodPut
 	PATCH  methodHttp = http.MethodPatch
 	DELETE methodHttp = http.MethodDelete
+)
+
+// Custom error types for better error handling
+type AirtableError struct {
+	StatusCode int
+	Message    string
+	Type       string
+	Err        error
+}
+
+func (e *AirtableError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("airtable error [%d]: %s (%s) - %v", e.StatusCode, e.Message, e.Type, e.Err)
+	}
+	return fmt.Sprintf("airtable error [%d]: %s (%s)", e.StatusCode, e.Message, e.Type)
+}
+
+func (e *AirtableError) Unwrap() error {
+	return e.Err
+}
+
+// Specific errors
+var (
+	ErrTableNameRequired = &AirtableError{StatusCode: 400, Message: tableNameRequired, Type: "validation_error"}
+	ErrAPIKeyRequired    = &AirtableError{StatusCode: 401, Message: apiKeyRequired, Type: "authentication_error"}
+	ErrBaseIDRequired    = &AirtableError{StatusCode: 400, Message: baseIDRequired, Type: "validation_error"}
+	ErrTooManyRequests   = &AirtableError{StatusCode: 429, Message: "rate limit exceeded", Type: "rate_limit_error"}
+	ErrNotFound          = &AirtableError{StatusCode: 404, Message: "resource not found", Type: "not_found_error"}
 )
 
 type GeneralError struct {
@@ -286,107 +433,203 @@ type DetailedError struct {
 	} `json:"error"`
 }
 
-func decodeJSONError(response *http.Response) string {
-	var err error
+// decodeJSONError decodes JSON errors from the Airtable API
+func decodeJSONError(response *http.Response) *AirtableError {
+	bodyBytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		return &AirtableError{
+			StatusCode: response.StatusCode,
+			Message:    "failed to read error response",
+			Type:       "read_error",
+			Err:        err,
+		}
+	}
 
-	bodyBytes := make([]byte, 1024*64) // being WAAAAY safe allowing for 64K
-	response.Body.Read(bodyBytes)
-	bodyBytes = bytes.Trim(bodyBytes, "\x00")
-
+	// Try to decode detailed error
 	var detailedErr DetailedError
-	err = json.Unmarshal(bodyBytes, &detailedErr)
-	if err == nil {
-		return detailedErr.Error.Message + ", " + detailedErr.Error.Type
+	if err := json.Unmarshal(bodyBytes, &detailedErr); err == nil && detailedErr.Error.Message != "" {
+		return &AirtableError{
+			StatusCode: response.StatusCode,
+			Message:    detailedErr.Error.Message,
+			Type:       detailedErr.Error.Type,
+		}
 	}
 
+	// Try to decode general error
 	var generalErr GeneralError
-	err = json.Unmarshal(bodyBytes, &generalErr)
-	if err == nil {
-		return generalErr.Error
+	if err := json.Unmarshal(bodyBytes, &generalErr); err == nil && generalErr.Error != "" {
+		return &AirtableError{
+			StatusCode: response.StatusCode,
+			Message:    generalErr.Error,
+			Type:       "general_error",
+		}
 	}
 
-	return string(bodyBytes)
+	// Si aucun format reconnu, retourner le contenu brut
+	return &AirtableError{
+		StatusCode: response.StatusCode,
+		Message:    string(bodyBytes),
+		Type:       "unknown_error",
+	}
 }
 
-func (a *Airtable) call(method methodHttp, path *url.URL, payload []byte, response interface{}) error {
-	req, _ := http.NewRequest(string(method), apiUrl+"/"+path.String(), bytes.NewBuffer(payload))
-
-	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
-	if a.xClientSecret != "" {
-		req.Header.Add("X-Airtable-Client-Secret", a.xClientSecret)
+// validateRequest validates request parameters
+func (a *Airtable) validateRequest(tableName string) error {
+	if a.apiKey == "" {
+		return ErrAPIKeyRequired
 	}
-	req.Header.Add("Content-Type", "application/json")
-
-	if a.debug {
-		dump, _ := httputil.DumpRequest(req, true)
-		log.Println(string(dump))
+	if a.base == "" {
+		return ErrBaseIDRequired
 	}
-
-	res, err := Client.Do(req)
-	if err != nil {
-		return err
+	if tableName == "" {
+		return ErrTableNameRequired
 	}
-	defer res.Body.Close()
+	return nil
+}
 
-	if res.StatusCode == http.StatusTooManyRequests {
-		if attempt < 5 {
-			attempt++
-			time.Sleep(time.Second * 1)
-			return a.call(method, path, payload, response)
+// calculateBackoff calculates the wait delay for retry with exponential backoff
+func calculateBackoff(attempt int, baseDelay, maxDelay time.Duration) time.Duration {
+	delay := time.Duration(float64(baseDelay) * math.Pow(2, float64(attempt)))
+	if delay > maxDelay {
+		delay = maxDelay
+	}
+	return delay
+}
+
+// call performs an HTTP request with intelligent retry and context support
+func (a *Airtable) call(ctx context.Context, method methodHttp, path *url.URL, payload []byte, response interface{}) error {
+	var lastErr error
+
+	for attempt := 0; attempt <= a.options.MaxRetries; attempt++ {
+		// Create request with context
+		req, err := http.NewRequestWithContext(ctx, string(method), apiURL+"/"+path.String(), bytes.NewBuffer(payload))
+		if err != nil {
+			return &AirtableError{StatusCode: 0, Message: "failed to create request", Type: "request_error", Err: err}
 		}
-		return fmt.Errorf("the API is limited to 5 requests per second per base. If you exceed this rate, you will receive a 429 status code and will need to wait 30 seconds before subsequent requests will succeed")
+
+		// Ajouter les headers
+		req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", a.apiKey))
+		if a.xClientSecret != "" {
+			req.Header.Add("X-Airtable-Client-Secret", a.xClientSecret)
+		}
+		req.Header.Add("Content-Type", "application/json")
+		if a.options.UserAgent != "" {
+			req.Header.Add("User-Agent", a.options.UserAgent)
+		}
+
+		// Log de debug
+		if a.options.Debug {
+			dump, _ := httputil.DumpRequest(req, true)
+			log.Printf("[DEBUG] Request: %s", string(dump))
+		}
+
+		// Perform request
+		res, err := a.httpClient.Do(req)
+		if err != nil {
+			lastErr = &AirtableError{StatusCode: 0, Message: "request failed", Type: "network_error", Err: err}
+			if attempt < a.options.MaxRetries {
+				delay := calculateBackoff(attempt, a.options.RetryDelay, a.options.MaxRetryDelay)
+				if a.options.Debug {
+					log.Printf("[DEBUG] Retrying in %v (attempt %d/%d)", delay, attempt+1, a.options.MaxRetries)
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(delay):
+					continue
+				}
+			}
+			return lastErr
+		}
+
+		// Handle response
+		if err := a.handleResponse(res, method, response); err != nil {
+			// Check if it's a retryable error
+			if airtableErr, ok := err.(*AirtableError); ok && a.isRetryableError(airtableErr) && attempt < a.options.MaxRetries {
+				lastErr = err
+				delay := calculateBackoff(attempt, a.options.RetryDelay, a.options.MaxRetryDelay)
+				if a.options.Debug {
+					log.Printf("[DEBUG] Retrying in %v (attempt %d/%d) due to error: %v", delay, attempt+1, a.options.MaxRetries, err)
+				}
+				res.Body.Close()
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(delay):
+					continue
+				}
+			}
+			res.Body.Close()
+			return err
+		}
+
+		res.Body.Close()
+		return nil
 	}
 
-	if res.StatusCode == http.StatusBadRequest {
-		return fmt.Errorf("the request encoding is invalid; the request can't be parsed as a valid JSON")
+	return lastErr
+}
+
+// isRetryableError determines if an error can be retried
+func (a *Airtable) isRetryableError(err *AirtableError) bool {
+	switch err.StatusCode {
+	case http.StatusTooManyRequests, http.StatusInternalServerError,
+		http.StatusBadGateway, http.StatusServiceUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// handleResponse handles the HTTP response
+func (a *Airtable) handleResponse(res *http.Response, method methodHttp, response interface{}) error {
+	if a.options.Debug {
+		dump, _ := httputil.DumpResponse(res, true)
+		log.Printf("[DEBUG] Response: %s", string(dump))
 	}
 
-	if res.StatusCode == http.StatusUnauthorized {
-		errStr := decodeJSONError(res)
-		return fmt.Errorf("accessing a protected resource without authorization or with invalid credentials: \"%s\"", errStr)
+	// Handle specific status codes
+	switch res.StatusCode {
+	case http.StatusOK, http.StatusCreated:
+		// Success
+	case http.StatusBadRequest:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "invalid request encoding or JSON", Type: "bad_request"}
+	case http.StatusUnauthorized:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "invalid or missing API key", Type: "unauthorized"}
+	case http.StatusPaymentRequired:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "account quota exceeded", Type: "quota_exceeded"}
+	case http.StatusForbidden:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "insufficient permissions", Type: "forbidden"}
+	case http.StatusNotFound:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "resource not found", Type: "not_found"}
+	case http.StatusRequestEntityTooLarge:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "request payload too large", Type: "payload_too_large"}
+	case http.StatusUnprocessableEntity:
+		return decodeJSONError(res)
+	case http.StatusInternalServerError:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "internal server error", Type: "server_error"}
+	case http.StatusBadGateway:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "bad gateway", Type: "gateway_error"}
+	case http.StatusServiceUnavailable:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "service unavailable", Type: "service_unavailable"}
+	case http.StatusTooManyRequests:
+		return &AirtableError{StatusCode: res.StatusCode, Message: "rate limit exceeded", Type: "rate_limit"}
+	default:
+		if res.StatusCode >= 400 {
+			return decodeJSONError(res)
+		}
 	}
 
-	if res.StatusCode == http.StatusPaymentRequired {
-		return fmt.Errorf("the account associated with the API key making requests hits a quota that can be increased by upgrading the Airtable account plan")
-	}
-
-	if res.StatusCode == http.StatusForbidden {
-		errStr := decodeJSONError(res)
-		return fmt.Errorf("accessing a protected resource with API credentials that don't have access to that resource: \"%s\"", errStr)
-	}
-
-	if res.StatusCode == http.StatusNotFound {
-		errStr := decodeJSONError(res)
-		return fmt.Errorf("route or resource is not found. This error is returned when the request hits an undefined route, or if the resource doesn't exist (e.g. has been deleted): \"%s\"", errStr)
-	}
-
-	if res.StatusCode == http.StatusRequestEntityTooLarge {
-		return fmt.Errorf("the request exceeded the maximum allowed payload size. You shouldn't encounter this under normal use")
-	}
-
-	if res.StatusCode == http.StatusUnprocessableEntity {
-		errStr := decodeJSONError(res)
-		return fmt.Errorf("the request data is invalid. This includes most of the base-specific validations. You will receive a detailed error message and code pointing to the exact issue, \"%s\"", errStr)
-	}
-
-	if res.StatusCode == http.StatusInternalServerError {
-		return fmt.Errorf("the server encountered an unexpected condition")
-	}
-
-	if res.StatusCode == http.StatusBadGateway {
-		return fmt.Errorf("airtable's servers are restarting or an unexpected outage is in progress. You should generally not receive this error, and requests are safe to retry")
-	}
-
-	if res.StatusCode == http.StatusServiceUnavailable {
-		return fmt.Errorf("the server could not process your request in time. The server could be temporarily unavailable, or it could have timed out processing your request. You should retry the request with backoffs")
-	}
-
+	// For DELETE, no content to decode
 	if method == DELETE {
 		return nil
 	}
 
+	// Decode JSON response if necessary
 	if response != nil {
-		return json.NewDecoder(res.Body).Decode(&response)
+		if err := json.NewDecoder(res.Body).Decode(response); err != nil {
+			return &AirtableError{StatusCode: res.StatusCode, Message: "failed to decode response", Type: "decode_error", Err: err}
+		}
 	}
 
 	return nil
@@ -447,18 +690,21 @@ func NewListPager(at *Airtable, pm Parameters) *ListPager {
 	return &ListPager{at, pm, AirtableList{}, false}
 }
 
-// Next fetches the next available page from at.List(...) and
-// returns the slice of records.
-// If the list has been exhausted (no more pages)
-// Next returns nil, ErrEOL.
+// Next retrieves the next page of records
+// If the list is exhausted (no more pages), returns nil, ErrEOL
 func (p *ListPager) Next() (records []AirtableItem, err error) {
+	return p.NextWithContext(context.Background())
+}
+
+// NextWithContext retrieves the next page of records with context
+func (p *ListPager) NextWithContext(ctx context.Context) (records []AirtableItem, err error) {
 	if p.done {
 		return nil, ErrEOL
 	}
 
-	// set params with last offset (if any), clear lo's offset
+	// set parameters with last offset (if any), clear lo's offset
 	p.pm.Offset, p.lo.Offset = p.lo.Offset, ""
-	if err := p.at.List(p.pm, &p.lo); err != nil {
+	if err := p.at.ListWithContext(ctx, p.pm, &p.lo); err != nil {
 		return nil, err
 	}
 

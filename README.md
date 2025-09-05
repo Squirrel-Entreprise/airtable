@@ -1,12 +1,22 @@
 <!-- markdownlint-disable MD010 -->
-# Golang Airtable API
+# Golang Airtable API v2.0
 
 [![GoDoc](https://godoc.org/github.com/Squirrel-Entreprise/airtable?status.svg)](https://pkg.go.dev/github.com/Squirrel-Entreprise/airtable)
 ![Go](https://github.com/Squirrel-Entreprise/airtable/workflows/Go/badge.svg)
 ![Go Report Card](https://goreportcard.com/badge/github.com/Squirrel-Entreprise/airtable)
 [![codecov](https://codecov.io/gh/Squirrel-Entreprise/airtable/branch/main/graph/badge.svg)](https://codecov.io/gh/Squirrel-Entreprise/airtable)
 
-A #golang package to access the [Airtable API](https://airtable.com/api).
+A modern Go package to access the [Airtable API](https://airtable.com/api) with enhanced features including context support, intelligent retry logic, and improved error handling.
+
+## What's New in v2.0
+
+- **Context Support**: All methods now support `context.Context` for cancellation and timeouts
+- **Intelligent Retry Logic**: Exponential backoff retry with configurable options
+- **Enhanced Error Handling**: Custom error types with detailed error information
+- **Configurable HTTP Client**: Customizable timeout, retry settings, and HTTP client
+- **Input Validation**: Comprehensive parameter validation
+- **Updated Go Version**: Requires Go 1.21+
+- **Improved Documentation**: All comments and documentation in English
 
 ## Table of contents
 
@@ -35,10 +45,40 @@ Airtable uses simple token-based authentication. To generate or manage your API 
 
 ## Getting started
 
-Initialize client
+### Basic Usage
+
+Initialize client with default options
 
 ```go
-a := airtable.New("xxx", "yyy")
+a := airtable.New("your-api-key", "your-base-id", false)
+```
+
+### Advanced Configuration
+
+Create client with custom options
+
+```go
+options := airtable.ClientOptions{
+    Timeout:       30 * time.Second,
+    MaxRetries:    3,
+    RetryDelay:    time.Second,
+    MaxRetryDelay: 30 * time.Second,
+    UserAgent:     "my-app/1.0",
+    Debug:         true,
+}
+a := airtable.NewWithOptions("your-api-key", "your-base-id", options)
+```
+
+### Context Support
+
+All methods support context for cancellation and timeouts
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+defer cancel()
+
+var result airtable.AirtableList
+err := a.ListWithContext(ctx, params, &result)
 ```
 
 ### List table records
